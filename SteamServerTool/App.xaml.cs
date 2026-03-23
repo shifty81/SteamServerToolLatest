@@ -15,6 +15,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Wire the static facade so all Core services can log without constructor injection.
+        AppLogger.Configure(Logger);
+
         // Catch unhandled exceptions on the WPF UI thread.
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 

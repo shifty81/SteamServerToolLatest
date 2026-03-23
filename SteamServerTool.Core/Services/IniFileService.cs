@@ -191,39 +191,50 @@ public class IniFileService
         var section  = "";
         var lineNum  = 0;
 
-        foreach (var raw in File.ReadLines(filePath))
+        try
         {
-            lineNum++;
-            var line = raw.TrimEnd();
-
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';') || line.StartsWith('#'))
-                continue;
-
-            // INI section header  [SectionName]
-            if (line.StartsWith('[') && line.Contains(']'))
+            // Use Latin-1 (ISO-8859-1) so the read never throws on non-UTF-8 bytes.
+            // Every possible byte value maps to a valid Latin-1 character, which is
+            // sufficient for parsing key=value structure regardless of the source encoding.
+            foreach (var raw in File.ReadLines(filePath, System.Text.Encoding.Latin1))
             {
-                var closeIdx = line.IndexOf(']');
-                if (closeIdx > 1)
-                    section = line.Substring(1, closeIdx - 1).Trim();
-                continue;
-            }
+                lineNum++;
+                var line = raw.TrimEnd();
 
-            // Key = Value  (also handles Key: Value for YAML-style)
-            int sep = line.IndexOf('=');
-            if (sep <= 0)
-            {
-                // YAML/TOML colon separator: "key: value"
-                sep = line.IndexOf(':');
-                if (sep <= 0 || line.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                             || line.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';') || line.StartsWith('#'))
                     continue;
+
+                // INI section header  [SectionName]
+                if (line.StartsWith('[') && line.Contains(']'))
+                {
+                    var closeIdx = line.IndexOf(']');
+                    if (closeIdx > 1)
+                        section = line.Substring(1, closeIdx - 1).Trim();
+                    continue;
+                }
+
+                // Key = Value  (also handles Key: Value for YAML-style)
+                int sep = line.IndexOf('=');
+                if (sep <= 0)
+                {
+                    // YAML/TOML colon separator: "key: value"
+                    sep = line.IndexOf(':');
+                    if (sep <= 0 || line.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                                 || line.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                var key = line[..sep].Trim();
+                var val = line[(sep + 1)..].Trim();
+
+                if (!string.IsNullOrEmpty(key))
+                    entries.Add(new IniEntry(section, key, val, lineNum));
             }
-
-            var key = line[..sep].Trim();
-            var val = line[(sep + 1)..].Trim();
-
-            if (!string.IsNullOrEmpty(key))
-                entries.Add(new IniEntry(section, key, val, lineNum));
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"ParseFile failed for '{filePath}': {ex.Message}");
+            // Return whatever entries were collected before the error.
         }
 
         return entries;
@@ -232,8 +243,10 @@ public class IniFileService
     // ─── Saving with history ──────────────────────────────────────────────
     public void SaveFile(string filePath, IReadOnlyList<IniEntry> entries)
     {
+        AppLogger.Info($"Saving config file '{filePath}' ({entries.Count} entries).");
         ArchiveCurrentVersion(filePath);
         WriteEntries(filePath, entries);
+        AppLogger.Info($"Config file saved: '{Path.GetFileName(filePath)}'.");
     }
 
     private static void WriteEntries(string filePath, IReadOnlyList<IniEntry> entries)
@@ -274,7 +287,9 @@ public class IniFileService
         if (!File.Exists(historyPath))
             throw new FileNotFoundException($"History file not found: {historyPath}");
 
+        AppLogger.Info($"Reverting '{filePath}' to history version '{Path.GetFileName(historyPath)}'.");
         File.Copy(historyPath, filePath, overwrite: true);
+        AppLogger.Info($"Revert complete for '{Path.GetFileName(filePath)}'.");
     }
 
     // ─── Internals ────────────────────────────────────────────────────────

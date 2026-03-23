@@ -44,6 +44,9 @@ public partial class MainWindow : Window
     // All discovered config files for the current server (used for filtering)
     private List<IniFileInfo> _allConfigFiles = new();
 
+    // Lazy-load handler for the config-file tab control; replaced on each scan.
+    private SelectionChangedEventHandler? _iniTabSelectionHandler;
+
     // ─── RCON command history ────────────────────────────────────────────────
     private readonly List<string> _rconHistory = new();
     private int _rconHistoryIndex = -1;
@@ -1066,11 +1069,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Renders the given list of config files as tabs.  Re-selects <paramref name="preferredPath"/> if provided.
+    /// Renders config-file tabs lazily: each tab is created with a lightweight placeholder and
+    /// its real content (INI editor or raw-text viewer) is built only when the tab is selected.
+    /// This prevents a single unreadable file from crashing the entire config-files pane.
     /// </summary>
     private void RenderConfigFileTabs(ServerConfig cfg, IEnumerable<IniFileInfo> files, string? preferredPath)
     {
+        // Remove any previous lazy-load handler to prevent accumulation across re-scans.
+        if (_iniTabSelectionHandler != null)
+        {
+            IniFileTabs.SelectionChanged -= _iniTabSelectionHandler;
+            _iniTabSelectionHandler = null;
+        }
+
         IniFileTabs.Items.Clear();
+        _iniEditorEntries.Clear();
 
         var fileList = files.ToList();
 
@@ -1093,52 +1106,136 @@ public partial class MainWindow : Window
             return;
         }
 
-        int selectedIdx = 0;
+        int preferredIdx = 0;
         for (int i = 0; i < fileList.Count; i++)
         {
-            var fileInfo = fileList[i];
+            var fileInfo  = fileList[i];
+            var isKvFile  = IsKeyValueFile(fileInfo.Path);
 
-            // Determine whether this is a plain key=value file or a raw text file
-            var isKvFile = IsKeyValueFile(fileInfo.Path);
-
-            TabItem tab;
-            if (isKvFile)
+            // Store build metadata in Tag; content will be built on first selection.
+            var tab = new TabItem
             {
-                // Parse and show the INI editor
-                if (!_iniEditorEntries.TryGetValue(fileInfo.Path, out var entries))
-                {
-                    entries = _iniFileService.ParseFile(fileInfo.Path);
-                    _iniEditorEntries[fileInfo.Path] = entries;
-                }
-                tab = new TabItem
-                {
-                    Header  = BuildConfigTabHeader(fileInfo),
-                    ToolTip = fileInfo.Path,
-                    Content = BuildIniEditorPanel(fileInfo.Path, entries, cfg)
-                };
-            }
-            else
-            {
-                // Show as raw text viewer
-                tab = new TabItem
-                {
-                    Header  = BuildConfigTabHeader(fileInfo),
-                    ToolTip = fileInfo.Path,
-                    Content = BuildRawTextPanel(fileInfo.Path, cfg)
-                };
-            }
+                Header  = BuildConfigTabHeader(fileInfo),
+                ToolTip = fileInfo.Path,
+                Tag     = (fileInfo, isKvFile, cfg),
+                Content = BuildLoadingPlaceholder()
+            };
 
             IniFileTabs.Items.Add(tab);
 
             if (preferredPath != null &&
                 fileInfo.Path.Equals(preferredPath, StringComparison.OrdinalIgnoreCase))
-                selectedIdx = i;
+                preferredIdx = i;
         }
 
+        // Wire lazy-load handler once.
+        _iniTabSelectionHandler = (_, _) => BuildSelectedTabContent();
+        IniFileTabs.SelectionChanged += _iniTabSelectionHandler;
+
+        // Select the preferred (or first) tab — this triggers the handler immediately.
         if (IniFileTabs.Items.Count > 0)
-            IniFileTabs.SelectedIndex = selectedIdx;
+            IniFileTabs.SelectedIndex = preferredIdx;
 
         UpdateConfigFileCount(_allConfigFiles.Count, fileList.Count);
+    }
+
+    /// <summary>
+    /// Called when the selected tab changes.  Builds the tab content on first visit so that
+    /// files are parsed one at a time and a bad file only affects its own tab.
+    /// </summary>
+    private void BuildSelectedTabContent()
+    {
+        if (IniFileTabs.SelectedItem is not TabItem tab) return;
+        // Tag is cleared after the first build to mark the tab as already populated.
+        if (tab.Tag is not (IniFileInfo fileInfo, bool isKvFile, ServerConfig cfg)) return;
+        tab.Tag = null;
+
+        try
+        {
+            App.Logger.Info($"[Config] Building tab content for '{fileInfo.RelativePath}'.");
+            UIElement content;
+            if (isKvFile)
+            {
+                var entries = _iniFileService.ParseFile(fileInfo.Path);
+                _iniEditorEntries[fileInfo.Path] = entries;
+                content = BuildIniEditorPanel(fileInfo.Path, entries, cfg);
+            }
+            else
+            {
+                content = BuildRawTextPanel(fileInfo.Path, cfg);
+            }
+            tab.Content = content;
+        }
+        catch (Exception ex)
+        {
+            tab.Content = BuildFileErrorPanel(fileInfo, ex.Message);
+            Log($"[ERROR] Could not load config file '{fileInfo.FileName}': {ex.Message}");
+        }
+    }
+
+    /// <summary>Returns a lightweight "loading" placeholder shown while tab content is deferred.</summary>
+    private static UIElement BuildLoadingPlaceholder()
+    {
+        return new Border
+        {
+            Child = new TextBlock
+            {
+                Text              = "Select this tab to load file…",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center,
+                Opacity           = 0.45
+            }
+        };
+    }
+
+    /// <summary>Returns an error panel shown when a config file cannot be loaded.</summary>
+    private UIElement BuildFileErrorPanel(IniFileInfo fileInfo, string errorMessage)
+    {
+        var panel = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+            Margin = new Thickness(20)
+        };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text      = "⚠ Could not load file",
+            FontSize  = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("StatusCrashedBrush"),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text         = fileInfo.Path,
+            FontSize     = 10,
+            Foreground   = (Brush)FindResource("DimForegroundBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin       = new Thickness(0, 0, 0, 8)
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text         = errorMessage,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground   = (Brush)FindResource("StatusCrashedBrush"),
+            Margin       = new Thickness(0, 0, 0, 12)
+        });
+
+        var btnOpen = new Button
+        {
+            Content = "↗ Open in External Editor",
+            Padding = new Thickness(12, 6, 12, 6),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        btnOpen.Click += (_, _) =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(fileInfo.Path) { UseShellExecute = true }); }
+            catch (Exception ex) { Log($"[ERROR] Could not open file: {ex.Message}"); }
+        };
+        panel.Children.Add(btnOpen);
+
+        return panel;
     }
 
     /// <summary>Builds a rich tab header showing the filename and, if in a subdirectory, the relative sub-path.</summary>
@@ -1215,8 +1312,18 @@ public partial class MainWindow : Window
 
         // ── Content ──
         string content;
-        try   { content = File.ReadAllText(filePath); }
-        catch (Exception ex) { content = $"[ERROR] Could not read file: {ex.Message}"; }
+        try
+        {
+            // Read with Latin-1 first so any byte sequence is valid.
+            // If the file is genuinely UTF-8, both decodings produce identical
+            // ASCII text; non-ASCII chars may look garbled but won't crash.
+            content = File.ReadAllText(filePath, System.Text.Encoding.Latin1);
+        }
+        catch (Exception ex)
+        {
+            content = $"[ERROR] Could not read file: {ex.Message}";
+            App.Logger.Error($"BuildRawTextPanel: could not read '{filePath}': {ex.Message}");
+        }
 
         var txtBox = new TextBox
         {

@@ -47,6 +47,7 @@ public class SteamCmdService
             var archiveName = isWindows ? "steamcmd.zip" : "steamcmd_linux.tar.gz";
             var archivePath = Path.Combine(installDir, archiveName);
 
+            AppLogger.Info($"Downloading SteamCMD from {url} to '{installDir}'.");
             progress?.Report($"Downloading SteamCMD from {url} …");
 
             using (var client = new HttpClient())
@@ -56,6 +57,7 @@ public class SteamCmdService
                 await File.WriteAllBytesAsync(archivePath, bytes);
             }
 
+            AppLogger.Info("SteamCMD archive downloaded; extracting …");
             progress?.Report("Extracting SteamCMD (existing files will be overwritten) …");
 
             if (isWindows)
@@ -81,11 +83,13 @@ public class SteamCmdService
             // Clean up archive
             try { File.Delete(archivePath); } catch { /* best effort */ }
 
+            AppLogger.Info($"SteamCMD installed to '{installDir}'; executable: '{SteamCmdPath}'.");
             progress?.Report($"SteamCMD installed to: {installDir}");
             return true;
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"SteamCMD download failed: {ex}");
             progress?.Report($"[ERROR] SteamCMD download failed: {ex.Message}");
             return false;
         }
@@ -95,10 +99,12 @@ public class SteamCmdService
     {
         if (config.AppId <= 0)
         {
+            AppLogger.Error($"InstallOrUpdateServer: invalid AppID ({config.AppId}) for '{config.Name}'.");
             progress?.Report("Error: Invalid AppID.");
             return false;
         }
 
+        AppLogger.Info($"Starting SteamCMD install/update for '{config.Name}' (AppID {config.AppId}).");
         Directory.CreateDirectory(config.Dir);
 
         var args = BuildInstallArgs(config);
@@ -109,10 +115,12 @@ public class SteamCmdService
     {
         if (config.AppId <= 0)
         {
+            AppLogger.Error($"UpdateMod: invalid AppID ({config.AppId}) for '{config.Name}'.");
             progress?.Report("Error: Invalid AppID.");
             return false;
         }
 
+        AppLogger.Info($"Downloading Workshop mod {modId} for AppID {config.AppId}.");
         var args = $"+login anonymous +workshop_download_item {config.AppId} {modId} +quit";
         return await RunSteamCmd(args, progress);
     }
@@ -124,6 +132,7 @@ public class SteamCmdService
 
     private async Task<bool> RunSteamCmd(string args, IProgress<string>? progress)
     {
+        AppLogger.Info($"Running SteamCMD: {SteamCmdPath} {args}");
         var psi = new ProcessStartInfo
         {
             FileName = SteamCmdPath,
@@ -138,12 +147,20 @@ public class SteamCmdService
 
         process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data != null) progress?.Report(e.Data);
+            if (e.Data != null)
+            {
+                AppLogger.Info($"[SteamCMD] {e.Data}");
+                progress?.Report(e.Data);
+            }
         };
 
         process.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data != null) progress?.Report($"[ERR] {e.Data}");
+            if (e.Data != null)
+            {
+                AppLogger.Warn($"[SteamCMD ERR] {e.Data}");
+                progress?.Report($"[ERR] {e.Data}");
+            }
         };
 
         try
@@ -152,10 +169,13 @@ public class SteamCmdService
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             await process.WaitForExitAsync();
-            return process.ExitCode == 0;
+            var success = process.ExitCode == 0;
+            AppLogger.Info($"SteamCMD finished with exit code {process.ExitCode} ({(success ? "OK" : "FAILED")}).");
+            return success;
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"Failed to run SteamCMD: {ex}");
             progress?.Report($"Error running steamcmd: {ex.Message}");
             return false;
         }

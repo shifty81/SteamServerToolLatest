@@ -60,14 +60,17 @@ public class ServerManager
     {
         if (!File.Exists(path))
         {
+            AppLogger.Info($"Config file not found at '{path}' — starting with empty server list.");
             Servers = new List<ServerConfig>();
             return;
         }
 
+        AppLogger.Info($"Loading config from '{path}'.");
         var json = File.ReadAllText(path);
         Servers = JsonSerializer.Deserialize<List<ServerConfig>>(json, _jsonOptions)
                   ?? new List<ServerConfig>();
 
+        AppLogger.Info($"Loaded {Servers.Count} server(s).");
         foreach (var server in Servers)
             _statuses[server.Name] = ServerStatus.Stopped;
     }
@@ -76,6 +79,7 @@ public class ServerManager
     {
         var json = JsonSerializer.Serialize(Servers, _jsonOptions);
         File.WriteAllText(path, json);
+        AppLogger.Info($"Config saved to '{path}'.");
     }
 
     public ServerStatus GetStatus(string name)
@@ -151,7 +155,12 @@ public class ServerManager
 
         var (isValid, error) = config.Validate();
         if (!isValid)
+        {
+            AppLogger.Error($"Cannot start '{config.Name}': {error}");
             throw new InvalidOperationException($"Cannot start server: {error}");
+        }
+
+        AppLogger.Info($"Starting server '{config.Name}' (AppID {config.AppId}).");
 
         var psi = new ProcessStartInfo
         {
@@ -177,11 +186,13 @@ public class ServerManager
             {
                 config.TotalCrashes++;
                 config.LastCrashTime = DateTime.UtcNow.ToString("o");
+                AppLogger.Crash($"Server '{config.Name}' crashed with exit code {exitCode}. Total crashes: {config.TotalCrashes}.");
                 SetStatus(config.Name, ServerStatus.Crashed);
                 ServerCrashed?.Invoke(this, new ServerCrashedEventArgs(config.Name, exitCode));
             }
             else
             {
+                AppLogger.Info($"Server '{config.Name}' stopped cleanly (exit code 0).");
                 SetStatus(config.Name, ServerStatus.Stopped);
             }
         };
@@ -194,6 +205,7 @@ public class ServerManager
         _processes[config.Name] = process;
         _startTimes[config.Name] = DateTime.UtcNow;
         SetStatus(config.Name, ServerStatus.Running);
+        AppLogger.Info($"Server '{config.Name}' is now running (PID {process.Id}).");
     }
 
     public void StopServer(string name)
@@ -207,11 +219,15 @@ public class ServerManager
         var config = Servers.FirstOrDefault(s => s.Name == name);
         var graceful = config?.GracefulShutdownSeconds ?? 15;
 
+        AppLogger.Info($"Stopping server '{name}' (graceful timeout: {graceful}s).");
         try
         {
             process.CloseMainWindow();
             if (!process.WaitForExit(graceful * 1000))
+            {
+                AppLogger.Warn($"Server '{name}' did not exit within {graceful}s — force-killing.");
                 process.Kill(true);
+            }
         }
         catch
         {
@@ -226,6 +242,7 @@ public class ServerManager
             _startTimes.Remove(name);
         }
 
+        AppLogger.Info($"Server '{name}' stopped.");
         SetStatus(name, ServerStatus.Stopped);
     }
 
@@ -238,6 +255,7 @@ public class ServerManager
             return;
         }
 
+        AppLogger.Warn($"Force-killing server '{name}'.");
         var config = Servers.FirstOrDefault(s => s.Name == name);
 
         try { process.Kill(true); }
@@ -251,11 +269,13 @@ public class ServerManager
             _startTimes.Remove(name);
         }
 
+        AppLogger.Info($"Server '{name}' force-killed.");
         SetStatus(name, ServerStatus.Stopped);
     }
 
     public void RestartServer(string name)
     {
+        AppLogger.Info($"Restarting server '{name}'.");
         var config = Servers.FirstOrDefault(s => s.Name == name)
                      ?? throw new InvalidOperationException($"Server '{name}' not found.");
 
@@ -266,6 +286,7 @@ public class ServerManager
     private void SetStatus(string name, ServerStatus status)
     {
         _statuses[name] = status;
+        AppLogger.Info($"[Status] '{name}' → {status}");
         ServerStatusChanged?.Invoke(this, new ServerStatusChangedEventArgs(name, status));
     }
 }

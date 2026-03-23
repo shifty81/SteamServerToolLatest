@@ -95,6 +95,7 @@ public class MinecraftService
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"Minecraft server download failed: {ex}");
             progress?.Report($"[ERROR] Minecraft download failed: {ex.Message}");
             return false;
         }

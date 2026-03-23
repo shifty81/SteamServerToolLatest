@@ -22,7 +22,9 @@ public class BackupService
         var backupFileName = $"{safeName}_{timestamp}.zip";
         var backupPath = System.IO.Path.Combine(config.BackupFolder, backupFileName);
 
+        AppLogger.Info($"Creating backup for '{config.Name}': '{backupPath}'.");
         ZipFile.CreateFromDirectory(config.Dir, backupPath, CompressionLevel.Optimal, false);
+        AppLogger.Info($"Backup created: '{backupFileName}'.");
 
         PruneBackups(config);
 
@@ -54,6 +56,8 @@ public class BackupService
         if (string.IsNullOrWhiteSpace(config.Dir))
             throw new InvalidOperationException("Server directory is not configured.");
 
+        AppLogger.Info($"Restoring backup '{backupPath}' to '{config.Dir}'.");
+
         // Clear the server directory before restoring
         if (Directory.Exists(config.Dir))
         {
@@ -69,6 +73,7 @@ public class BackupService
         }
 
         ZipFile.ExtractToDirectory(backupPath, config.Dir, overwriteFiles: true);
+        AppLogger.Info($"Backup restored for '{config.Name}'.");
     }
 
     public void PruneBackups(ServerConfig config)
@@ -80,8 +85,15 @@ public class BackupService
 
         foreach (var backup in toDelete)
         {
-            try { File.Delete(backup.Path); }
-            catch { /* best effort */ }
+            try
+            {
+                File.Delete(backup.Path);
+                AppLogger.Info($"Pruned old backup: '{backup.Name}'.");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn($"Could not prune backup '{backup.Name}': {ex.Message}");
+            }
         }
     }
 }
