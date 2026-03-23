@@ -180,6 +180,31 @@ public class ServerManager
         SetStatus(name, ServerStatus.Stopped);
     }
 
+    /// <summary>Immediately terminates the server process without a graceful shutdown period.</summary>
+    public void ForceKillServer(string name)
+    {
+        if (!_processes.TryGetValue(name, out var process) || process.HasExited)
+        {
+            SetStatus(name, ServerStatus.Stopped);
+            return;
+        }
+
+        var config = Servers.FirstOrDefault(s => s.Name == name);
+
+        try { process.Kill(true); }
+        catch { /* already dead */ }
+
+        _processes.Remove(name);
+
+        if (_startTimes.TryGetValue(name, out var start) && config != null)
+        {
+            config.TotalUptimeSeconds += (long)(DateTime.UtcNow - start).TotalSeconds;
+            _startTimes.Remove(name);
+        }
+
+        SetStatus(name, ServerStatus.Stopped);
+    }
+
     public void RestartServer(string name)
     {
         var config = Servers.FirstOrDefault(s => s.Name == name)

@@ -21,6 +21,11 @@ public partial class MainWindow : Window
     private ServerConfig? _selectedConfig;
     private readonly DispatcherTimer _refreshTimer;
     private const string ConfigPath = "servers.json";
+    private const int MaxRconHistorySize = 100;
+
+    // ─── RCON command history ────────────────────────────────────────────────
+    private readonly List<string> _rconHistory = new();
+    private int _rconHistoryIndex = -1;
 
     // ─── Constructor ────────────────────────────────────────────────────────
     public MainWindow()
@@ -97,8 +102,10 @@ public partial class MainWindow : Window
         TxtOvAppId.Text       = cfg.AppId.ToString();
         TxtOvGroup.Text       = string.IsNullOrEmpty(cfg.Group) ? "—" : cfg.Group;
         TxtOvMaxPlayers.Text  = cfg.MaxPlayers > 0 ? cfg.MaxPlayers.ToString() : "—";
+        TxtOvQueryPort.Text   = cfg.QueryPort > 0 ? cfg.QueryPort.ToString() : "—";
         TxtOvCrashes.Text     = cfg.TotalCrashes.ToString();
         TxtOvLastCrash.Text   = string.IsNullOrEmpty(cfg.LastCrashTime) ? "—" : cfg.LastCrashTime;
+        TxtOvTags.Text        = cfg.Tags.Count > 0 ? string.Join(", ", cfg.Tags) : "—";
         TxtOvNotes.Text       = cfg.Notes;
 
         // Config tab
@@ -119,6 +126,11 @@ public partial class MainWindow : Window
         CfgDiscordWebhook.Text  = cfg.DiscordWebhookUrl;
         CfgShutdownSecs.Text    = cfg.GracefulShutdownSeconds.ToString();
         CfgQueryPort.Text       = cfg.QueryPort.ToString();
+        CfgTags.Text            = string.Join(", ", cfg.Tags);
+        CfgRestartWarnMins.Text = cfg.RestartWarningMinutes.ToString();
+        CfgRestartWarnMsg.Text  = cfg.RestartWarningMessage;
+        CfgCpuAlert.Text        = cfg.CpuAlertThreshold.ToString();
+        CfgMemAlert.Text        = cfg.MemAlertThresholdMB.ToString();
         CfgAutoUpdate.IsChecked         = cfg.AutoUpdate;
         CfgAutoStart.IsChecked          = cfg.AutoStartOnLaunch;
         CfgFavorite.IsChecked           = cfg.Favorite;
@@ -126,6 +138,12 @@ public partial class MainWindow : Window
 
         // Mods tab
         RefreshModList(cfg);
+
+        // Scheduled commands tab
+        RefreshScheduledList(cfg);
+
+        // Env vars tab
+        RefreshEnvVarList(cfg);
 
         // Backups tab
         RefreshBackupList(cfg);
@@ -313,6 +331,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BtnForceKill_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null) return;
+        var result = MessageBox.Show(
+            $"Force-kill '{_selectedConfig.Name}'? This will terminate the process immediately.",
+            "Confirm Force Kill", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+        try
+        {
+            _serverManager.ForceKillServer(_selectedConfig.Name);
+            Log($"Force-killed {_selectedConfig.Name}.");
+        }
+        catch (Exception ex)
+        {
+            Log($"[ERROR] Force kill '{_selectedConfig.Name}': {ex.Message}");
+        }
+    }
+
     private void TryStartServer(ServerConfig cfg)
     {
         var (valid, err) = cfg.Validate();
@@ -380,6 +416,14 @@ public partial class MainWindow : Window
         _selectedConfig.AutoStartOnLaunch      = CfgAutoStart.IsChecked == true;
         _selectedConfig.Favorite               = CfgFavorite.IsChecked == true;
         _selectedConfig.BackupBeforeRestart    = CfgBackupBeforeRestart.IsChecked == true;
+
+        _selectedConfig.Tags = CfgTags.Text
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        _selectedConfig.RestartWarningMinutes  = int.TryParse(CfgRestartWarnMins.Text, out var rwm) ? rwm : 0;
+        _selectedConfig.RestartWarningMessage  = CfgRestartWarnMsg.Text;
+        _selectedConfig.CpuAlertThreshold      = double.TryParse(CfgCpuAlert.Text, out var cpu) ? cpu : 90.0;
+        _selectedConfig.MemAlertThresholdMB    = long.TryParse(CfgMemAlert.Text, out var mem) ? mem : 0;
 
         var (valid, err) = _selectedConfig.Validate();
         if (!valid)
@@ -453,6 +497,75 @@ public partial class MainWindow : Window
         var progress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[SteamCMD] {msg}")));
         Log($"[SteamCMD] Updating mod {item.ModId} for {_selectedConfig.Name}...");
         _ = _steamCmdService.UpdateMod(_selectedConfig, item.ModId, progress);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SCHEDULED COMMANDS TAB
+    // ═══════════════════════════════════════════════════════════════════════
+    private void RefreshScheduledList(ServerConfig cfg)
+    {
+        LbScheduled.ItemsSource = cfg.ScheduledRconCommands
+            .Select(c => new ScheduledCommandItem(c))
+            .ToList();
+    }
+
+    private void BtnAddScheduled_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null) return;
+        var cmd = TxtSchedCommand.Text.Trim();
+        if (string.IsNullOrEmpty(cmd)) { Log("Scheduled command text is required."); return; }
+        if (!int.TryParse(TxtSchedInterval.Text.Trim(), out var mins) || mins <= 0)
+        { Log("Interval must be a positive integer (minutes)."); return; }
+
+        _selectedConfig.ScheduledRconCommands.Add(new ScheduledRconCommand
+        {
+            Command = cmd,
+            IntervalMinutes = mins
+        });
+        TxtSchedCommand.Clear();
+        TxtSchedInterval.Clear();
+        RefreshScheduledList(_selectedConfig);
+        Log($"Scheduled command added: \"{cmd}\" every {mins} min.");
+    }
+
+    private void BtnRemoveScheduled_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null || LbScheduled.SelectedItem is not ScheduledCommandItem item) return;
+        _selectedConfig.ScheduledRconCommands.Remove(item.Source);
+        RefreshScheduledList(_selectedConfig);
+        Log($"Scheduled command removed: \"{item.Command}\"");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  ENV VARS TAB
+    // ═══════════════════════════════════════════════════════════════════════
+    private void RefreshEnvVarList(ServerConfig cfg)
+    {
+        LbEnvVars.ItemsSource = cfg.EnvironmentVariables
+            .Select(kv => new EnvVarItem(kv.Key, kv.Value))
+            .ToList();
+    }
+
+    private void BtnAddEnvVar_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null) return;
+        var key = TxtEnvKey.Text.Trim();
+        var val = TxtEnvValue.Text;
+        if (string.IsNullOrEmpty(key)) { Log("Variable name is required."); return; }
+
+        _selectedConfig.EnvironmentVariables[key] = val;
+        TxtEnvKey.Clear();
+        TxtEnvValue.Clear();
+        RefreshEnvVarList(_selectedConfig);
+        Log($"Environment variable set: {key}={val}");
+    }
+
+    private void BtnRemoveEnvVar_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null || LbEnvVars.SelectedItem is not EnvVarItem item) return;
+        _selectedConfig.EnvironmentVariables.Remove(item.Key);
+        RefreshEnvVarList(_selectedConfig);
+        Log($"Environment variable removed: {item.Key}");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -559,7 +672,24 @@ public partial class MainWindow : Window
 
     private async void TxtConsoleInput_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter) await SendRconCommand();
+        if (e.Key == Key.Enter)
+        {
+            await SendRconCommand();
+        }
+        else if (e.Key == Key.Up && _rconHistory.Count > 0)
+        {
+            _rconHistoryIndex = Math.Min(_rconHistoryIndex + 1, _rconHistory.Count - 1);
+            TxtConsoleInput.Text = _rconHistory[_rconHistoryIndex];
+            TxtConsoleInput.CaretIndex = TxtConsoleInput.Text.Length;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Down)
+        {
+            _rconHistoryIndex = Math.Max(_rconHistoryIndex - 1, -1);
+            TxtConsoleInput.Text = _rconHistoryIndex >= 0 ? _rconHistory[_rconHistoryIndex] : "";
+            TxtConsoleInput.CaretIndex = TxtConsoleInput.Text.Length;
+            e.Handled = true;
+        }
     }
 
     private async Task SendRconCommand()
@@ -572,6 +702,14 @@ public partial class MainWindow : Window
             AppendConsole("[WARN] Not connected. Use Connect first.");
             return;
         }
+
+        // Store in history (skip duplicates at the front)
+        if (_rconHistory.Count == 0 || _rconHistory[0] != cmd)
+        {
+            _rconHistory.Insert(0, cmd);
+            if (_rconHistory.Count > MaxRconHistorySize) _rconHistory.RemoveAt(_rconHistory.Count - 1);
+        }
+        _rconHistoryIndex = -1;
 
         AppendConsole($"> {cmd}");
         TxtConsoleInput.Clear();
@@ -733,5 +871,27 @@ public class BackupListItem
         Name      = info.Name;
         Timestamp = info.Timestamp;
         SizeBytes = info.SizeBytes;
+    }
+}
+
+public class ScheduledCommandItem
+{
+    public ScheduledRconCommand Source          { get; }
+    public string               Command        => Source.Command;
+    public int                  IntervalMinutes => Source.IntervalMinutes;
+    public string               IntervalLabel  => $"every {Source.IntervalMinutes}m";
+
+    public ScheduledCommandItem(ScheduledRconCommand source) => Source = source;
+}
+
+public class EnvVarItem
+{
+    public string Key   { get; }
+    public string Value { get; }
+
+    public EnvVarItem(string key, string value)
+    {
+        Key   = key;
+        Value = value;
     }
 }
