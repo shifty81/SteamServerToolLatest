@@ -36,7 +36,10 @@
 
                 <!-- Left: action buttons -->
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnNewServer"      Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
+                    <Button x:Name="BtnNewServer"      Content="🧙 Server Installer Wizard"
+                            Margin="0,0,6,0" Click="BtnNewServer_Click"
+                            Style="{StaticResource AccentButton}"
+                            ToolTip="Launch the step-by-step wizard to add and deploy a new server"/>
                     <Button x:Name="BtnRefresh"        Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
                     <Button x:Name="BtnStartAll"       Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
                             Style="{StaticResource AccentButton}"/>
@@ -78,21 +81,34 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Dashboard header with "Add Remote Server" action -->
+                    <!-- Dashboard header with action buttons -->
                     <Border Grid.Row="0"
                             Background="{StaticResource ControlBgBrush}"
                             BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="0,0,0,1" Padding="14,8">
+                            BorderThickness="0,0,0,1" Padding="14,10">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Left"
-                                       Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
-                                       Foreground="{StaticResource DimForegroundBrush}"
-                                       VerticalAlignment="Center"/>
-                            <Button DockPanel.Dock="Right"
-                                    Content="＋ Add Remote Server"
-                                    Padding="10,4"
-                                    Click="BtnAddRemoteServer_Click"
-                                    ToolTip="Add a remote server monitored via RCON"/>
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Rectangle Width="3" Height="16"
+                                           RadiusX="1.5" RadiusY="1.5"
+                                           Fill="{StaticResource AccentBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBlock Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="🧙 Add Server"
+                                        Padding="10,4"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource AccentButton}"
+                                        Click="BtnNewServer_Click"
+                                        ToolTip="Launch Server Installer Wizard"/>
+                                <Button Content="＋ Add Remote Server"
+                                        Padding="10,4"
+                                        Click="BtnAddRemoteServer_Click"
+                                        ToolTip="Add a remote server monitored via RCON"/>
+                            </StackPanel>
                         </DockPanel>
                     </Border>
 

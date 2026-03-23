@@ -121,6 +121,20 @@
         <Setter Property="BorderBrush" Value="#A02020"/>
     </Style>
 
+    <!-- Success/green button variant -->
+    <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background"  Value="#207A3A"/>
+        <Setter Property="Foreground"  Value="{StaticResource HighlightTextBrush}"/>
+        <Setter Property="BorderBrush" Value="#27933F"/>
+    </Style>
+
+    <!-- Warning/amber button variant -->
+    <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background"  Value="#7A5A00"/>
+        <Setter Property="Foreground"  Value="{StaticResource HighlightTextBrush}"/>
+        <Setter Property="BorderBrush" Value="#A07800"/>
+    </Style>
+
     <!-- ═══════════════════════════════════════════
          TEXTBOX
          ═══════════════════════════════════════════ -->

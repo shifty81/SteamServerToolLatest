@@ -105,6 +105,7 @@ public partial class FirstRunSetupDialog : Window
         BtnDownload.IsEnabled = false;
         BtnLocate.IsEnabled   = false;
         BtnSkip.IsEnabled     = false;
+        BtnSkip.Content       = "Finish";   // Rename to Finish during/after install
 
         TxtProgress.Clear();
 
@@ -116,15 +117,17 @@ public partial class FirstRunSetupDialog : Window
         {
             ResolvedSteamCmdPath = _steamCmdService.SteamCmdPath;
             SetBanner(found: true, customText: $"SteamCMD installed to: {installDir}");
+            BtnSkip.IsEnabled = true;   // Unlock Finish after success
         }
         else
         {
             SetBanner(found: false, customText: "Download failed — see log for details. You can try again or use 'Locate Existing…'.");
             BtnDownload.IsEnabled = true;
+            BtnSkip.Content       = "Skip for Now";   // Revert on failure
+            BtnSkip.IsEnabled     = true;
         }
 
         BtnLocate.IsEnabled = true;
-        BtnSkip.IsEnabled   = true;
     }
 
     private void BtnSkip_Click(object sender, RoutedEventArgs e)

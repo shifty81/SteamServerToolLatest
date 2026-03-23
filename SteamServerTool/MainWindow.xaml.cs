@@ -285,11 +285,18 @@ public partial class MainWindow : Window
     // ═══════════════════════════════════════════════════════════════════════
     private void BtnNewServer_Click(object sender, RoutedEventArgs e)
     {
-        var cfg = new ServerConfig { Name = "New Server", AppId = 0 };
-        _serverManager.Servers.Add(cfg);
-        PopulateServerList();
-        SelectServer(cfg);
-        Log("Created new server entry.");
+        var wizard = new Dialogs.ServerInstallerWizard(
+            _steamCmdService, _minecraftService, _vintageStoryService)
+        { Owner = this };
+
+        if (wizard.ShowDialog() == true && wizard.Result != null)
+        {
+            _serverManager.Servers.Add(wizard.Result);
+            PopulateServerList();
+            SelectServer(wizard.Result);
+            Log($"[Wizard] Added server '{wizard.Result.Name}' via Installer Wizard.");
+            _serverManager.SaveConfig(ConfigPath);
+        }
     }
 
     private void BtnRefresh_Click(object sender, RoutedEventArgs e)
@@ -460,26 +467,112 @@ public partial class MainWindow : Window
         var localServers  = _serverManager.Servers.Where(s => !s.IsRemote).ToList();
         var remoteServers = _serverManager.Servers.Where(s =>  s.IsRemote).ToList();
 
+        if (localServers.Count == 0)
+        {
+            var empty = new Border
+            {
+                Background      = (Brush)FindResource("ControlBgBrush"),
+                BorderBrush     = (Brush)FindResource("BorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(8),
+                Padding         = new Thickness(24, 20, 24, 20),
+                Margin          = new Thickness(0, 8, 0, 0)
+            };
+            var emptyStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            emptyStack.Children.Add(new TextBlock
+            {
+                Text      = "🧙",
+                FontSize  = 40,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin    = new Thickness(0, 0, 0, 8)
+            });
+            emptyStack.Children.Add(new TextBlock
+            {
+                Text      = "No servers yet",
+                FontSize  = 16,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            emptyStack.Children.Add(new TextBlock
+            {
+                Text      = "Click '🧙 Add Server' to launch the Server Installer Wizard",
+                FontSize  = 12,
+                Foreground = (Brush)FindResource("DimForegroundBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin    = new Thickness(0, 4, 0, 0)
+            });
+            empty.Child = emptyStack;
+            DashboardPanel.Children.Add(empty);
+        }
+
         // ── LOCAL servers grouped by cluster ─────────────────────────────
         var groups = localServers
-            .GroupBy(s => string.IsNullOrEmpty(s.Group) ? "(Standalone)" : s.Group)
-            .OrderBy(g => g.Key);
+            .GroupBy(s => string.IsNullOrEmpty(s.Group) ? "" : s.Group)
+            .OrderBy(g => string.IsNullOrEmpty(g.Key) ? "ZZZZZ" : g.Key);
 
         foreach (var group in groups)
         {
+            // ── Group container ──
+            var groupContainer = new Border
+            {
+                Background      = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+                BorderBrush     = (Brush)FindResource("BorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(10),
+                Margin          = new Thickness(0, 8, 0, 0),
+                Padding         = new Thickness(12, 8, 12, 12)
+            };
+
+            var groupStack = new StackPanel();
+
+            // ── Group header ──
+            var groupKey = string.IsNullOrEmpty(group.Key) ? "Standalone" : group.Key;
+            var headerPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+
+            var accentBar = new Border
+            {
+                Width           = 3,
+                Background      = (Brush)FindResource(
+                    string.IsNullOrEmpty(group.Key) ? "BorderBrush" : "AccentBrush"),
+                CornerRadius    = new CornerRadius(1.5),
+                Margin          = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
             var groupLabel = new TextBlock
             {
-                Text       = group.Key,
-                FontWeight = FontWeights.SemiBold,
-                FontSize   = 11,
-                Foreground = (Brush)FindResource("DimForegroundBrush"),
-                Margin     = new Thickness(0, 12, 0, 4),
-                Width      = DashboardPanel.ActualWidth > 24 ? DashboardPanel.ActualWidth - 24 : double.NaN
+                Text       = groupKey.ToUpperInvariant(),
+                FontWeight = FontWeights.Bold,
+                FontSize   = 10,
+                Foreground = string.IsNullOrEmpty(group.Key)
+                    ? (Brush)FindResource("DimForegroundBrush")
+                    : (Brush)FindResource("AccentBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0)
             };
-            DashboardPanel.Children.Add(groupLabel);
+            var serverCount = new TextBlock
+            {
+                Text       = $"{group.Count()} server{(group.Count() == 1 ? "" : "s")}",
+                FontSize   = 10,
+                Foreground = (Brush)FindResource("DimForegroundBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
 
+            DockPanel.SetDock(accentBar, Dock.Left);
+            DockPanel.SetDock(groupLabel, Dock.Left);
+            headerPanel.Children.Add(accentBar);
+            headerPanel.Children.Add(groupLabel);
+            headerPanel.Children.Add(serverCount);
+
+            groupStack.Children.Add(headerPanel);
+
+            // ── Server badges in a wrap panel ──
+            var badgeRow = new WrapPanel { Orientation = Orientation.Horizontal };
             foreach (var cfg in group.OrderBy(s => s.Name))
-                DashboardPanel.Children.Add(BuildServerBadge(cfg));
+                badgeRow.Children.Add(BuildServerBadge(cfg));
+
+            groupStack.Children.Add(badgeRow);
+            groupContainer.Child = groupStack;
+            DashboardPanel.Children.Add(groupContainer);
         }
 
         // ── REMOTE servers ────────────────────────────────────────────────
@@ -611,13 +704,13 @@ public partial class MainWindow : Window
             (!string.IsNullOrEmpty(cfg.ServerType) && t.Name == cfg.ServerType));
         var icon = template?.Icon ?? "🖥️";
 
-        // ── Status dot ──
-        var dot = new Ellipse
+        // ── Status indicator bar (colored top strip) ──
+        var statusBar = new Border
         {
-            Width  = 10, Height = 10,
-            Fill   = statusBrush,
-            Margin = new Thickness(0, 0, 6, 0),
-            VerticalAlignment = VerticalAlignment.Center
+            Height          = 4,
+            Background      = statusBrush,
+            CornerRadius    = new CornerRadius(6, 6, 0, 0),
+            Margin          = new Thickness(-1, -1, -1, 0)
         };
 
         // ── Header row ──
@@ -625,7 +718,7 @@ public partial class MainWindow : Window
         headerPanel.Children.Add(new TextBlock
         {
             Text     = icon,
-            FontSize = 22,
+            FontSize = 24,
             Margin   = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -638,12 +731,21 @@ public partial class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth   = 140
         });
-        nameBlock.Children.Add(new TextBlock
+        var statusLabel = new StackPanel { Orientation = Orientation.Horizontal };
+        statusLabel.Children.Add(new Ellipse
+        {
+            Width  = 7, Height = 7,
+            Fill   = statusBrush,
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        statusLabel.Children.Add(new TextBlock
         {
             Text       = status.ToString(),
             FontSize   = 11,
             Foreground = statusBrush
         });
+        nameBlock.Children.Add(statusLabel);
         DockPanel.SetDock(nameBlock, Dock.Left);
         headerPanel.Children.Add(nameBlock);
 
@@ -668,7 +770,8 @@ public partial class MainWindow : Window
         AddMetric("CPU",     isRunning ? $"{cpuPct:F1}%" : "—",    0, 0);
         AddMetric("Memory",  isRunning ? $"{memMb} MB"  : "—",    0, 1);
         AddMetric("Players", cfg.MaxPlayers > 0 ? $"/ {cfg.MaxPlayers}" : "—", 1, 0);
-        AddMetric("Group",   string.IsNullOrEmpty(cfg.Group) ? "Standalone" : cfg.Group, 1, 1);
+        AddMetric("Uptime",  isRunning && _serverManager.GetUptime(cfg.Name) is TimeSpan up
+            ? FormatTimeSpan(up) : "—", 1, 1);
 
         // ── Action buttons ──
         var btnStart = new Button
@@ -729,26 +832,32 @@ public partial class MainWindow : Window
         buttonRow.Children.Add(btnBackup);
         buttonRow.Children.Add(btnConfigure);
 
-        // ── Assemble badge ──
-        var stack = new StackPanel { Margin = new Thickness(8) };
-        stack.Children.Add(headerPanel);
-        stack.Children.Add(metricsPanel);
-        stack.Children.Add(buttonRow);
+        // ── Assemble badge content ──
+        var contentStack = new StackPanel { Margin = new Thickness(10, 8, 10, 10) };
+        contentStack.Children.Add(headerPanel);
+        contentStack.Children.Add(metricsPanel);
+        contentStack.Children.Add(buttonRow);
+
+        // ── Outer container with status bar at top ──
+        var outerStack = new StackPanel();
+        outerStack.Children.Add(statusBar);
+        outerStack.Children.Add(contentStack);
 
         var badge = new Border
         {
-            Width           = 210,
+            Width           = 220,
             Background      = (Brush)FindResource("PanelBgBrush"),
-            BorderBrush     = (Brush)FindResource("BorderBrush"),
+            BorderBrush     = statusBrush,
             BorderThickness = new Thickness(1),
             CornerRadius    = new CornerRadius(8),
             Margin          = new Thickness(0, 0, 10, 10),
-            Child           = stack
+            Child           = outerStack,
+            ClipToBounds    = true
         };
         badge.Effect = new System.Windows.Media.Effects.DropShadowEffect
         {
             Color = Colors.Black, Direction = 270,
-            ShadowDepth = 2, BlurRadius = 6, Opacity = 0.3
+            ShadowDepth = 3, BlurRadius = 8, Opacity = 0.4
         };
 
         return badge;
