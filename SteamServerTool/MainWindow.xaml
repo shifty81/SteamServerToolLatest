@@ -36,7 +36,10 @@
 
                 <!-- Left: action buttons -->
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnNewServer"      Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
+                    <Button x:Name="BtnNewServer"      Content="🧙 Server Installer Wizard"
+                            Margin="0,0,6,0" Click="BtnNewServer_Click"
+                            Style="{StaticResource AccentButton}"
+                            ToolTip="Launch the step-by-step wizard to add and deploy a new server"/>
                     <Button x:Name="BtnRefresh"        Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
                     <Button x:Name="BtnStartAll"       Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
                             Style="{StaticResource AccentButton}"/>
@@ -78,21 +81,34 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Dashboard header with "Add Remote Server" action -->
+                    <!-- Dashboard header with action buttons -->
                     <Border Grid.Row="0"
                             Background="{StaticResource ControlBgBrush}"
                             BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="0,0,0,1" Padding="14,8">
+                            BorderThickness="0,0,0,1" Padding="14,10">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Left"
-                                       Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
-                                       Foreground="{StaticResource DimForegroundBrush}"
-                                       VerticalAlignment="Center"/>
-                            <Button DockPanel.Dock="Right"
-                                    Content="＋ Add Remote Server"
-                                    Padding="10,4"
-                                    Click="BtnAddRemoteServer_Click"
-                                    ToolTip="Add a remote server monitored via RCON"/>
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Rectangle Width="3" Height="16"
+                                           RadiusX="1.5" RadiusY="1.5"
+                                           Fill="{StaticResource AccentBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBlock Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="🧙 Add Server"
+                                        Padding="10,4"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource AccentButton}"
+                                        Click="BtnNewServer_Click"
+                                        ToolTip="Launch Server Installer Wizard"/>
+                                <Button Content="＋ Add Remote Server"
+                                        Padding="10,4"
+                                        Click="BtnAddRemoteServer_Click"
+                                        ToolTip="Add a remote server monitored via RCON"/>
+                            </StackPanel>
                         </DockPanel>
                     </Border>
 
@@ -567,19 +583,63 @@
                                  GotFocus="TabConfigFiles_GotFocus">
                             <Grid Margin="10">
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>  <!-- header bar -->
+                                    <RowDefinition Height="Auto"/>  <!-- search/filter bar -->
+                                    <RowDefinition Height="*"/>     <!-- tab content -->
                                 </Grid.RowDefinitions>
-                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                                    <TextBlock DockPanel.Dock="Left"
-                                               Text="CONFIG FILE EDITOR" FontWeight="SemiBold" FontSize="11"
-                                               Foreground="{StaticResource DimForegroundBrush}"
-                                               VerticalAlignment="Center"/>
-                                    <Button DockPanel.Dock="Right"
-                                            Content="↻ Rescan Files"
-                                            Click="BtnRescanConfigFiles_Click"/>
+
+                                <!-- Header: title + action buttons -->
+                                <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5"
+                                                   Fill="{StaticResource AccentBrush}"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="CONFIG FILE EDITOR"
+                                                   FontWeight="SemiBold" FontSize="11"
+                                                   Foreground="{StaticResource DimForegroundBrush}"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtConfigFileCount"
+                                                   Text=""
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource DimForegroundBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Content="📂 Open Specific File…"
+                                                Padding="10,4"
+                                                Margin="0,0,6,0"
+                                                Click="BtnBrowseConfigFile_Click"
+                                                ToolTip="Browse for a specific config file to open in the editor"/>
+                                        <Button Content="↻ Rescan"
+                                                Padding="10,4"
+                                                Click="BtnRescanConfigFiles_Click"
+                                                ToolTip="Re-scan the server directory for config files"/>
+                                    </StackPanel>
                                 </DockPanel>
-                                <TabControl Grid.Row="1"
+
+                                <!-- Filter/search bar -->
+                                <Grid Grid.Row="1" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0"
+                                             x:Name="TxtConfigFileFilter"
+                                             Tag="Filter files by name…"
+                                             TextChanged="TxtConfigFileFilter_TextChanged"
+                                             Margin="0,0,6,0"/>
+                                    <TextBlock Grid.Column="1"
+                                               x:Name="TxtConfigScanPatterns"
+                                               Text="*.ini *.cfg *.conf *.properties *.toml *.yaml"
+                                               FontSize="10"
+                                               Foreground="{StaticResource DimForegroundBrush}"
+                                               VerticalAlignment="Center"
+                                               ToolTip="Supported file patterns scanned automatically"/>
+                                </Grid>
+
+                                <!-- Tab control showing files -->
+                                <TabControl Grid.Row="2"
                                             x:Name="IniFileTabs"
                                             Background="Transparent"
                                             BorderThickness="1"

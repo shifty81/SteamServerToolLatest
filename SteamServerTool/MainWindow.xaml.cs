@@ -41,6 +41,9 @@ public partial class MainWindow : Window
     // key: filePath → live entry list currently shown in the UI
     private readonly Dictionary<string, List<IniEntry>> _iniEditorEntries = new();
 
+    // All discovered config files for the current server (used for filtering)
+    private List<IniFileInfo> _allConfigFiles = new();
+
     // ─── RCON command history ────────────────────────────────────────────────
     private readonly List<string> _rconHistory = new();
     private int _rconHistoryIndex = -1;
@@ -285,11 +288,18 @@ public partial class MainWindow : Window
     // ═══════════════════════════════════════════════════════════════════════
     private void BtnNewServer_Click(object sender, RoutedEventArgs e)
     {
-        var cfg = new ServerConfig { Name = "New Server", AppId = 0 };
-        _serverManager.Servers.Add(cfg);
-        PopulateServerList();
-        SelectServer(cfg);
-        Log("Created new server entry.");
+        var wizard = new Dialogs.ServerInstallerWizard(
+            _steamCmdService, _minecraftService, _vintageStoryService)
+        { Owner = this };
+
+        if (wizard.ShowDialog() == true && wizard.Result != null)
+        {
+            _serverManager.Servers.Add(wizard.Result);
+            PopulateServerList();
+            SelectServer(wizard.Result);
+            Log($"[Wizard] Added server '{wizard.Result.Name}' via Installer Wizard.");
+            _serverManager.SaveConfig(ConfigPath);
+        }
     }
 
     private void BtnRefresh_Click(object sender, RoutedEventArgs e)
@@ -460,26 +470,112 @@ public partial class MainWindow : Window
         var localServers  = _serverManager.Servers.Where(s => !s.IsRemote).ToList();
         var remoteServers = _serverManager.Servers.Where(s =>  s.IsRemote).ToList();
 
+        if (localServers.Count == 0)
+        {
+            var empty = new Border
+            {
+                Background      = (Brush)FindResource("ControlBgBrush"),
+                BorderBrush     = (Brush)FindResource("BorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(8),
+                Padding         = new Thickness(24, 20, 24, 20),
+                Margin          = new Thickness(0, 8, 0, 0)
+            };
+            var emptyStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            emptyStack.Children.Add(new TextBlock
+            {
+                Text      = "🧙",
+                FontSize  = 40,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin    = new Thickness(0, 0, 0, 8)
+            });
+            emptyStack.Children.Add(new TextBlock
+            {
+                Text      = "No servers yet",
+                FontSize  = 16,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            emptyStack.Children.Add(new TextBlock
+            {
+                Text      = "Click '🧙 Add Server' to launch the Server Installer Wizard",
+                FontSize  = 12,
+                Foreground = (Brush)FindResource("DimForegroundBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin    = new Thickness(0, 4, 0, 0)
+            });
+            empty.Child = emptyStack;
+            DashboardPanel.Children.Add(empty);
+        }
+
         // ── LOCAL servers grouped by cluster ─────────────────────────────
         var groups = localServers
-            .GroupBy(s => string.IsNullOrEmpty(s.Group) ? "(Standalone)" : s.Group)
-            .OrderBy(g => g.Key);
+            .GroupBy(s => string.IsNullOrEmpty(s.Group) ? "" : s.Group)
+            .OrderBy(g => string.IsNullOrEmpty(g.Key) ? "ZZZZZ" : g.Key);
 
         foreach (var group in groups)
         {
+            // ── Group container ──
+            var groupContainer = new Border
+            {
+                Background      = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+                BorderBrush     = (Brush)FindResource("BorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(10),
+                Margin          = new Thickness(0, 8, 0, 0),
+                Padding         = new Thickness(12, 8, 12, 12)
+            };
+
+            var groupStack = new StackPanel();
+
+            // ── Group header ──
+            var groupKey = string.IsNullOrEmpty(group.Key) ? "Standalone" : group.Key;
+            var headerPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+
+            var accentBar = new Border
+            {
+                Width           = 3,
+                Background      = (Brush)FindResource(
+                    string.IsNullOrEmpty(group.Key) ? "BorderBrush" : "AccentBrush"),
+                CornerRadius    = new CornerRadius(1.5),
+                Margin          = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
             var groupLabel = new TextBlock
             {
-                Text       = group.Key,
-                FontWeight = FontWeights.SemiBold,
-                FontSize   = 11,
-                Foreground = (Brush)FindResource("DimForegroundBrush"),
-                Margin     = new Thickness(0, 12, 0, 4),
-                Width      = DashboardPanel.ActualWidth > 24 ? DashboardPanel.ActualWidth - 24 : double.NaN
+                Text       = groupKey.ToUpperInvariant(),
+                FontWeight = FontWeights.Bold,
+                FontSize   = 10,
+                Foreground = string.IsNullOrEmpty(group.Key)
+                    ? (Brush)FindResource("DimForegroundBrush")
+                    : (Brush)FindResource("AccentBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0)
             };
-            DashboardPanel.Children.Add(groupLabel);
+            var serverCount = new TextBlock
+            {
+                Text       = $"{group.Count()} server{(group.Count() == 1 ? "" : "s")}",
+                FontSize   = 10,
+                Foreground = (Brush)FindResource("DimForegroundBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
 
+            DockPanel.SetDock(accentBar, Dock.Left);
+            DockPanel.SetDock(groupLabel, Dock.Left);
+            headerPanel.Children.Add(accentBar);
+            headerPanel.Children.Add(groupLabel);
+            headerPanel.Children.Add(serverCount);
+
+            groupStack.Children.Add(headerPanel);
+
+            // ── Server badges in a wrap panel ──
+            var badgeRow = new WrapPanel { Orientation = Orientation.Horizontal };
             foreach (var cfg in group.OrderBy(s => s.Name))
-                DashboardPanel.Children.Add(BuildServerBadge(cfg));
+                badgeRow.Children.Add(BuildServerBadge(cfg));
+
+            groupStack.Children.Add(badgeRow);
+            groupContainer.Child = groupStack;
+            DashboardPanel.Children.Add(groupContainer);
         }
 
         // ── REMOTE servers ────────────────────────────────────────────────
@@ -611,13 +707,13 @@ public partial class MainWindow : Window
             (!string.IsNullOrEmpty(cfg.ServerType) && t.Name == cfg.ServerType));
         var icon = template?.Icon ?? "🖥️";
 
-        // ── Status dot ──
-        var dot = new Ellipse
+        // ── Status indicator bar (colored top strip) ──
+        var statusBar = new Border
         {
-            Width  = 10, Height = 10,
-            Fill   = statusBrush,
-            Margin = new Thickness(0, 0, 6, 0),
-            VerticalAlignment = VerticalAlignment.Center
+            Height          = 4,
+            Background      = statusBrush,
+            CornerRadius    = new CornerRadius(6, 6, 0, 0),
+            Margin          = new Thickness(-1, -1, -1, 0)
         };
 
         // ── Header row ──
@@ -625,7 +721,7 @@ public partial class MainWindow : Window
         headerPanel.Children.Add(new TextBlock
         {
             Text     = icon,
-            FontSize = 22,
+            FontSize = 24,
             Margin   = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -638,12 +734,21 @@ public partial class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth   = 140
         });
-        nameBlock.Children.Add(new TextBlock
+        var statusLabel = new StackPanel { Orientation = Orientation.Horizontal };
+        statusLabel.Children.Add(new Ellipse
+        {
+            Width  = 7, Height = 7,
+            Fill   = statusBrush,
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        statusLabel.Children.Add(new TextBlock
         {
             Text       = status.ToString(),
             FontSize   = 11,
             Foreground = statusBrush
         });
+        nameBlock.Children.Add(statusLabel);
         DockPanel.SetDock(nameBlock, Dock.Left);
         headerPanel.Children.Add(nameBlock);
 
@@ -668,7 +773,8 @@ public partial class MainWindow : Window
         AddMetric("CPU",     isRunning ? $"{cpuPct:F1}%" : "—",    0, 0);
         AddMetric("Memory",  isRunning ? $"{memMb} MB"  : "—",    0, 1);
         AddMetric("Players", cfg.MaxPlayers > 0 ? $"/ {cfg.MaxPlayers}" : "—", 1, 0);
-        AddMetric("Group",   string.IsNullOrEmpty(cfg.Group) ? "Standalone" : cfg.Group, 1, 1);
+        AddMetric("Uptime",  isRunning && _serverManager.GetUptime(cfg.Name) is TimeSpan up
+            ? FormatTimeSpan(up) : "—", 1, 1);
 
         // ── Action buttons ──
         var btnStart = new Button
@@ -729,26 +835,32 @@ public partial class MainWindow : Window
         buttonRow.Children.Add(btnBackup);
         buttonRow.Children.Add(btnConfigure);
 
-        // ── Assemble badge ──
-        var stack = new StackPanel { Margin = new Thickness(8) };
-        stack.Children.Add(headerPanel);
-        stack.Children.Add(metricsPanel);
-        stack.Children.Add(buttonRow);
+        // ── Assemble badge content ──
+        var contentStack = new StackPanel { Margin = new Thickness(10, 8, 10, 10) };
+        contentStack.Children.Add(headerPanel);
+        contentStack.Children.Add(metricsPanel);
+        contentStack.Children.Add(buttonRow);
+
+        // ── Outer container with status bar at top ──
+        var outerStack = new StackPanel();
+        outerStack.Children.Add(statusBar);
+        outerStack.Children.Add(contentStack);
 
         var badge = new Border
         {
-            Width           = 210,
+            Width           = 220,
             Background      = (Brush)FindResource("PanelBgBrush"),
-            BorderBrush     = (Brush)FindResource("BorderBrush"),
+            BorderBrush     = statusBrush,
             BorderThickness = new Thickness(1),
             CornerRadius    = new CornerRadius(8),
             Margin          = new Thickness(0, 0, 10, 10),
-            Child           = stack
+            Child           = outerStack,
+            ClipToBounds    = true
         };
         badge.Effect = new System.Windows.Media.Effects.DropShadowEffect
         {
             Color = Colors.Black, Direction = 270,
-            ShadowDepth = 2, BlurRadius = 6, Opacity = 0.3
+            ShadowDepth = 3, BlurRadius = 8, Opacity = 0.4
         };
 
         return badge;
@@ -806,85 +918,354 @@ public partial class MainWindow : Window
 
     private void BtnRescanConfigFiles_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedConfig != null)
-            LoadIniFileTabs(_selectedConfig);
+        if (_selectedConfig == null) return;
+        TxtConfigFileFilter.Text = "";
+        LoadIniFileTabs(_selectedConfig);
+    }
+
+    /// <summary>Browse for a specific config file and add it as a tab.</summary>
+    private void BtnBrowseConfigFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null) { Log("No server selected."); return; }
+
+        var ofd = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Open Config File",
+            Filter = "Config files (*.ini;*.cfg;*.conf;*.properties;*.toml;*.yaml;*.yml;*.json;*.xml;*.txt)" +
+                     "|*.ini;*.cfg;*.conf;*.properties;*.toml;*.yaml;*.yml;*.json;*.xml;*.txt" +
+                     "|All files (*.*)|*.*",
+            InitialDirectory = Directory.Exists(_selectedConfig.Dir) ? _selectedConfig.Dir : ""
+        };
+
+        if (ofd.ShowDialog() != true) return;
+
+        var fileInfo = _iniFileService.ResolveManualFile(ofd.FileName, _selectedConfig.Dir);
+        if (fileInfo == null)
+        {
+            Log($"[ERROR] Cannot open file: {ofd.FileName}");
+            return;
+        }
+
+        // Add to the known list if not already there, then show the tab
+        if (!_allConfigFiles.Any(f => f.Path.Equals(fileInfo.Path, StringComparison.OrdinalIgnoreCase)))
+            _allConfigFiles.Add(fileInfo);
+
+        // Switch filter off so the new file is visible
+        TxtConfigFileFilter.Text = "";
+        RenderConfigFileTabs(_selectedConfig, _allConfigFiles, fileInfo.Path);
+        Log($"[Config] Opened: {fileInfo.RelativePath}");
+    }
+
+    private void TxtConfigFileFilter_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_selectedConfig == null || _allConfigFiles.Count == 0) return;
+
+        var filter   = TxtConfigFileFilter.Text.Trim();
+        var filtered = string.IsNullOrEmpty(filter)
+            ? _allConfigFiles
+            : _allConfigFiles
+                .Where(f => f.RelativePath.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                            f.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        RenderConfigFileTabs(_selectedConfig, filtered, null);
     }
 
     private void LoadIniFileTabs(ServerConfig cfg)
     {
-        IniFileTabs.Items.Clear();
         _iniEditorEntries.Clear();
 
         if (string.IsNullOrEmpty(cfg.Dir) || !Directory.Exists(cfg.Dir))
         {
-            var placeholder = new TabItem { Header = "No directory set" };
-            placeholder.Content = new TextBlock
-            {
-                Text = "Server directory is not configured or does not exist.",
-                Margin = new Thickness(16),
-                Foreground = (Brush)FindResource("DimForegroundBrush")
-            };
-            IniFileTabs.Items.Add(placeholder);
+            _allConfigFiles = new List<IniFileInfo>();
+            ShowConfigFilePlaceholder("No directory set",
+                $"Server directory is not configured or does not exist.\n\nSet a directory on the Config tab, then click ↻ Rescan.");
+            UpdateConfigFileCount(0, 0);
             return;
         }
 
-        var files = _iniFileService.GetConfigFiles(cfg.Dir);
-        if (files.Count == 0)
+        // Discover key=value files and text files
+        var kvFiles   = _iniFileService.GetConfigFiles(cfg.Dir);
+        var textFiles = _iniFileService.GetTextFiles(cfg.Dir);
+
+        // Merge, avoiding duplicates
+        _allConfigFiles = kvFiles.ToList();
+        foreach (var tf in textFiles)
         {
-            var placeholder = new TabItem { Header = "No config files found" };
-            placeholder.Content = new TextBlock
+            if (!_allConfigFiles.Any(f => f.Path.Equals(tf.Path, StringComparison.OrdinalIgnoreCase)))
+                _allConfigFiles.Add(tf);
+        }
+
+        var filter = TxtConfigFileFilter?.Text?.Trim() ?? "";
+        var visible = string.IsNullOrEmpty(filter)
+            ? _allConfigFiles
+            : _allConfigFiles
+                .Where(f => f.RelativePath.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                            f.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        UpdateConfigFileCount(_allConfigFiles.Count, visible.Count);
+        RenderConfigFileTabs(cfg, visible, null);
+    }
+
+    private void UpdateConfigFileCount(int total, int visible)
+    {
+        if (TxtConfigFileCount == null) return;
+        TxtConfigFileCount.Text = total == 0
+            ? ""
+            : visible == total
+                ? $"({total} file{(total == 1 ? "" : "s")} found)"
+                : $"({visible} of {total} shown)";
+    }
+
+    private void ShowConfigFilePlaceholder(string header, string message)
+    {
+        IniFileTabs.Items.Clear();
+        var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 20) };
+        panel.Children.Add(new TextBlock
+        {
+            Text       = "📄",
+            FontSize   = 36,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin     = new Thickness(0, 0, 0, 8)
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text       = header,
+            FontSize   = 14,
+            FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text       = message,
+            FontSize   = 12,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            Foreground = (Brush)FindResource("DimForegroundBrush"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin     = new Thickness(0, 6, 0, 0),
+            MaxWidth   = 500
+        });
+        var tab = new TabItem { Header = header, Content = panel };
+        IniFileTabs.Items.Add(tab);
+    }
+
+    /// <summary>
+    /// Renders the given list of config files as tabs.  Re-selects <paramref name="preferredPath"/> if provided.
+    /// </summary>
+    private void RenderConfigFileTabs(ServerConfig cfg, IEnumerable<IniFileInfo> files, string? preferredPath)
+    {
+        IniFileTabs.Items.Clear();
+
+        var fileList = files.ToList();
+
+        if (fileList.Count == 0)
+        {
+            if (_allConfigFiles.Count == 0)
             {
-                Text = "No *.ini or *.cfg files were found in the server directory.",
-                Margin = new Thickness(16),
-                Foreground = (Brush)FindResource("DimForegroundBrush")
-            };
-            IniFileTabs.Items.Add(placeholder);
+                ShowConfigFilePlaceholder(
+                    "No config files found",
+                    "No *.ini, *.cfg, *.properties, *.toml, *.yaml, or similar files were found in the server directory.\n\n" +
+                    "Use '📂 Open Specific File…' to browse to the file you need, or make sure the server is installed first.");
+            }
+            else
+            {
+                ShowConfigFilePlaceholder(
+                    "No matches",
+                    "No files match the current filter. Clear the filter box to show all files.");
+            }
+            UpdateConfigFileCount(_allConfigFiles.Count, 0);
             return;
         }
 
-        foreach (var fileInfo in files)
+        int selectedIdx = 0;
+        for (int i = 0; i < fileList.Count; i++)
         {
-            var entries = _iniFileService.ParseFile(fileInfo.Path);
-            _iniEditorEntries[fileInfo.Path] = entries;
+            var fileInfo = fileList[i];
 
-            var tab = new TabItem { Header = fileInfo.FileName };
-            tab.Content = BuildIniEditorPanel(fileInfo.Path, entries, cfg);
+            // Determine whether this is a plain key=value file or a raw text file
+            var isKvFile = IsKeyValueFile(fileInfo.Path);
+
+            TabItem tab;
+            if (isKvFile)
+            {
+                // Parse and show the INI editor
+                if (!_iniEditorEntries.TryGetValue(fileInfo.Path, out var entries))
+                {
+                    entries = _iniFileService.ParseFile(fileInfo.Path);
+                    _iniEditorEntries[fileInfo.Path] = entries;
+                }
+                tab = new TabItem
+                {
+                    Header  = BuildConfigTabHeader(fileInfo),
+                    ToolTip = fileInfo.Path,
+                    Content = BuildIniEditorPanel(fileInfo.Path, entries, cfg)
+                };
+            }
+            else
+            {
+                // Show as raw text viewer
+                tab = new TabItem
+                {
+                    Header  = BuildConfigTabHeader(fileInfo),
+                    ToolTip = fileInfo.Path,
+                    Content = BuildRawTextPanel(fileInfo.Path, cfg)
+                };
+            }
+
             IniFileTabs.Items.Add(tab);
+
+            if (preferredPath != null &&
+                fileInfo.Path.Equals(preferredPath, StringComparison.OrdinalIgnoreCase))
+                selectedIdx = i;
         }
 
         if (IniFileTabs.Items.Count > 0)
-            IniFileTabs.SelectedIndex = 0;
+            IniFileTabs.SelectedIndex = selectedIdx;
+
+        UpdateConfigFileCount(_allConfigFiles.Count, fileList.Count);
+    }
+
+    /// <summary>Builds a rich tab header showing the filename and, if in a subdirectory, the relative sub-path.</summary>
+    private object BuildConfigTabHeader(IniFileInfo fileInfo)
+    {
+        // If the file is at the root of the server dir the relative path equals the filename
+        var subDir = Path.GetDirectoryName(fileInfo.RelativePath);
+        if (string.IsNullOrEmpty(subDir))
+            return fileInfo.FileName;
+
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
+        {
+            Text     = fileInfo.FileName,
+            FontSize = 12
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text       = subDir,
+            FontSize   = 9,
+            Foreground = (Brush)FindResource("DimForegroundBrush")
+        });
+        return panel;
+    }
+
+    /// <summary>Returns true when a file extension indicates a parseable key=value config.</summary>
+    private static bool IsKeyValueFile(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext is ".ini" or ".cfg" or ".conf" or ".config" or ".properties" or ".toml" or ".yaml" or ".yml";
+    }
+
+    /// <summary>Builds a raw text viewer panel for JSON / XML / TXT files.</summary>
+    private UIElement BuildRawTextPanel(string filePath, ServerConfig cfg)
+    {
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        // ── Toolbar ──
+        var toolbar = new DockPanel { Margin = new Thickness(8, 8, 8, 4) };
+
+        var fileLabel = new TextBlock
+        {
+            Text              = Path.GetFileName(filePath),
+            FontSize          = 11,
+            Foreground        = (Brush)FindResource("DimForegroundBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0)
+        };
+        DockPanel.SetDock(fileLabel, Dock.Left);
+        toolbar.Children.Add(fileLabel);
+
+        var btnOpenExternally = new Button
+        {
+            Content = "↗ Open in Editor",
+            Padding = new Thickness(10, 4, 10, 4),
+            ToolTip = "Open this file in your default text editor"
+        };
+        btnOpenExternally.Click += (_, _) =>
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true };
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch (Exception ex) { Log($"[ERROR] Could not open file: {ex.Message}"); }
+        };
+        DockPanel.SetDock(btnOpenExternally, Dock.Right);
+        toolbar.Children.Add(btnOpenExternally);
+
+        Grid.SetRow(toolbar, 0);
+        root.Children.Add(toolbar);
+
+        // ── Content ──
+        string content;
+        try   { content = File.ReadAllText(filePath); }
+        catch (Exception ex) { content = $"[ERROR] Could not read file: {ex.Message}"; }
+
+        var txtBox = new TextBox
+        {
+            Text                     = content,
+            IsReadOnly               = true,
+            TextWrapping             = TextWrapping.NoWrap,
+            AcceptsReturn            = true,
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            FontFamily               = new System.Windows.Media.FontFamily("Consolas"),
+            FontSize                 = 12,
+            Background               = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x14)),
+            Foreground               = new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)),
+            BorderThickness          = new Thickness(0),
+            Padding                  = new Thickness(8)
+        };
+        Grid.SetRow(txtBox, 1);
+        root.Children.Add(txtBox);
+
+        return root;
     }
 
     private UIElement BuildIniEditorPanel(string filePath, List<IniEntry> entries, ServerConfig cfg)
     {
         var root = new Grid();
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // top toolbar
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // search bar
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // entries
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // bottom status
 
-        // ── Toolbar ──
+        // ── Top Toolbar ──
         var toolbar = new DockPanel { Margin = new Thickness(8, 8, 8, 4) };
+
+        // File path label (left)
+        var filePathLabel = new TextBlock
+        {
+            Text              = filePath,
+            FontSize          = 10,
+            Foreground        = (Brush)FindResource("DimForegroundBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+            MaxWidth          = 300,
+            ToolTip           = filePath,
+            Margin            = new Thickness(0, 0, 8, 0)
+        };
+        DockPanel.SetDock(filePathLabel, Dock.Left);
+        toolbar.Children.Add(filePathLabel);
 
         var historyCombo = new ComboBox
         {
-            Width = 260, Margin = new Thickness(0, 0, 8, 0),
+            Width = 200, Margin = new Thickness(0, 0, 6, 0),
             ToolTip = "Revert to a previous version"
         };
         var history = _iniFileService.GetHistory(filePath, cfg.Dir);
         foreach (var h in history)
-            historyCombo.Items.Add(new ComboBoxItem
-            {
-                Content = Path.GetFileName(h),
-                Tag     = h
-            });
-        DockPanel.SetDock(historyCombo, Dock.Left);
+            historyCombo.Items.Add(new ComboBoxItem { Content = Path.GetFileName(h), Tag = h });
+        DockPanel.SetDock(historyCombo, Dock.Right);
         toolbar.Children.Add(historyCombo);
 
         var btnRevert = new Button
         {
             Content = "↩ Revert",
-            Margin  = new Thickness(0, 0, 8, 0),
+            Margin  = new Thickness(0, 0, 6, 0),
             Padding = new Thickness(10, 4, 10, 4)
         };
         btnRevert.Click += (_, _) =>
@@ -909,14 +1290,14 @@ public partial class MainWindow : Window
                     "No version selected", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         };
-        DockPanel.SetDock(btnRevert, Dock.Left);
+        DockPanel.SetDock(btnRevert, Dock.Right);
         toolbar.Children.Add(btnRevert);
 
         var btnSave = new Button
         {
             Content = "💾 Save Changes",
             Style   = (Style)FindResource("AccentButton"),
-            Margin  = new Thickness(0, 0, 8, 0),
+            Margin  = new Thickness(0, 0, 6, 0),
             Padding = new Thickness(10, 4, 10, 4)
         };
         btnSave.Click += (_, _) =>
@@ -925,51 +1306,116 @@ public partial class MainWindow : Window
             {
                 _iniFileService.SaveFile(filePath, _iniEditorEntries[filePath]);
                 Log($"[INI] Saved {Path.GetFileName(filePath)} (previous version archived).");
-                // refresh history dropdown
                 historyCombo.Items.Clear();
                 foreach (var h in _iniFileService.GetHistory(filePath, cfg.Dir))
-                    historyCombo.Items.Add(new ComboBoxItem
-                    {
-                        Content = Path.GetFileName(h),
-                        Tag     = h
-                    });
+                    historyCombo.Items.Add(new ComboBoxItem { Content = Path.GetFileName(h), Tag = h });
             }
             catch (Exception ex) { Log($"[ERROR] Save INI: {ex.Message}"); }
         };
         DockPanel.SetDock(btnSave, Dock.Right);
         toolbar.Children.Add(btnSave);
 
+        var btnOpenExternally = new Button
+        {
+            Content = "↗ Open Externally",
+            Margin  = new Thickness(0, 0, 6, 0),
+            Padding = new Thickness(10, 4, 10, 4),
+            ToolTip = "Open this file in your default text editor"
+        };
+        btnOpenExternally.Click += (_, _) =>
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true };
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch (Exception ex) { Log($"[ERROR] Could not open file: {ex.Message}"); }
+        };
+        DockPanel.SetDock(btnOpenExternally, Dock.Right);
+        toolbar.Children.Add(btnOpenExternally);
+
         Grid.SetRow(toolbar, 0);
         root.Children.Add(toolbar);
+
+        // ── Entry search bar ──
+        var searchBar = new DockPanel { Margin = new Thickness(8, 0, 8, 6) };
+
+        var entryCountLabel = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize          = 11,
+            Foreground        = (Brush)FindResource("DimForegroundBrush"),
+            Margin            = new Thickness(8, 0, 0, 0)
+        };
+        entryCountLabel.Text = $"{entries.Count} setting{(entries.Count == 1 ? "" : "s")}";
+        DockPanel.SetDock(entryCountLabel, Dock.Right);
+        searchBar.Children.Add(entryCountLabel);
+
+        var searchBox = new TextBox
+        {
+            Tag    = "Search settings (key or value)…",
+            Margin = new Thickness(0, 0, 0, 0)
+        };
+        searchBar.Children.Add(searchBox);
+
+        Grid.SetRow(searchBar, 1);
+        root.Children.Add(searchBar);
 
         // ── Entry list ──
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var stack  = new StackPanel { Margin = new Thickness(8) };
 
-        string? lastSection = null;
-        foreach (var entry in entries)
+        void RenderEntries(string filter)
         {
-            if (entry.Section != lastSection)
+            stack.Children.Clear();
+            var filtered = string.IsNullOrEmpty(filter)
+                ? entries
+                : entries.Where(e =>
+                    e.Key.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                    e.Value.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                    e.Section.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            entryCountLabel.Text = string.IsNullOrEmpty(filter)
+                ? $"{entries.Count} setting{(entries.Count == 1 ? "" : "s")}"
+                : $"{filtered.Count} of {entries.Count} shown";
+
+            string? lastSection = null;
+            foreach (var entry in filtered)
             {
-                if (lastSection != null)
-                    stack.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 6) });
-                if (!string.IsNullOrEmpty(entry.Section))
-                    stack.Children.Add(new TextBlock
-                    {
-                        Text       = $"[{entry.Section}]",
-                        FontWeight = FontWeights.SemiBold,
-                        FontSize   = 11,
-                        Foreground = (Brush)FindResource("AccentBrush"),
-                        Margin     = new Thickness(0, 4, 0, 4)
-                    });
-                lastSection = entry.Section;
+                if (entry.Section != lastSection)
+                {
+                    if (lastSection != null)
+                        stack.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 6) });
+                    if (!string.IsNullOrEmpty(entry.Section))
+                        stack.Children.Add(new TextBlock
+                        {
+                            Text       = $"[{entry.Section}]",
+                            FontWeight = FontWeights.SemiBold,
+                            FontSize   = 11,
+                            Foreground = (Brush)FindResource("AccentBrush"),
+                            Margin     = new Thickness(0, 4, 0, 4)
+                        });
+                    lastSection = entry.Section;
+                }
+                stack.Children.Add(BuildIniEntryRow(entry, _iniEditorEntries[filePath]));
             }
 
-            stack.Children.Add(BuildIniEntryRow(entry, _iniEditorEntries[filePath]));
+            if (filtered.Count == 0)
+                stack.Children.Add(new TextBlock
+                {
+                    Text       = "No matching settings.",
+                    Foreground = (Brush)FindResource("DimForegroundBrush"),
+                    Margin     = new Thickness(8)
+                });
         }
 
+        // Initial render
+        RenderEntries("");
+
+        searchBox.TextChanged += (_, _) => RenderEntries(searchBox.Text.Trim());
+
         scroll.Content = stack;
-        Grid.SetRow(scroll, 1);
+        Grid.SetRow(scroll, 2);
         root.Children.Add(scroll);
 
         return root;

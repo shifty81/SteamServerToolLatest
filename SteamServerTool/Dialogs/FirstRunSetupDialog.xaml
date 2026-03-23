@@ -105,7 +105,7 @@
                     Style="{StaticResource AccentButton}"
                     Click="BtnDownload_Click"/>
 
-            <Button Grid.Column="6"
+        <Button Grid.Column="6"
                     x:Name="BtnSkip"
                     Content="Skip for Now"
                     Padding="14,8"

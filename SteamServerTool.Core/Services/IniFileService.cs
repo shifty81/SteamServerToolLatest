@@ -2,18 +2,33 @@ namespace SteamServerTool.Core.Services;
 
 public record IniEntry(string Section, string Key, string Value, int LineNumber);
 
-public record IniFileInfo(string Path, string FileName);
+public record IniFileInfo(string Path, string FileName, string RelativePath = "");
 
 /// <summary>
-/// Scans server directories for INI/CFG config files, parses them into
-/// editable key-value entries, and manages a rolling history of up to
+/// Scans server directories for config files (INI/CFG/properties/YAML/TOML/JSON/XML),
+/// parses them into editable key-value entries, and manages a rolling history of up to
 /// 16 archived versions per file so changes can be reverted.
 /// </summary>
 public class IniFileService
 {
     private const int MaxHistory = 16;
 
-    private static readonly string[] ScanPatterns = { "*.ini", "*.cfg" };
+    /// <summary>
+    /// File extensions considered plain key=value config files that the INI editor can parse.
+    /// </summary>
+    private static readonly string[] ScanPatterns =
+    {
+        "*.ini", "*.cfg", "*.conf", "*.config",
+        "*.properties",          // Minecraft server.properties, Java .properties
+        "*.toml",                // Rust, Valheim, and many modern game servers
+        "*.yaml", "*.yml",       // Squad, various game servers
+    };
+
+    /// <summary>Additional extensions we surface as read-only raw text tabs.</summary>
+    private static readonly string[] TextPatterns =
+    {
+        "*.json", "*.xml", "*.txt",
+    };
 
     // ─── Discovery ────────────────────────────────────────────────────────
     public List<IniFileInfo> GetConfigFiles(string serverDir)
@@ -23,22 +38,80 @@ public class IniFileService
 
         var results = new List<IniFileInfo>();
         foreach (var pattern in ScanPatterns)
-        {
-            try
-            {
-                var files = Directory.GetFiles(serverDir, pattern, SearchOption.AllDirectories);
-                foreach (var file in files)
-                {
-                    // Skip history archives stored by this service
-                    if (file.Contains(HistoryDir(serverDir), StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    results.Add(new IniFileInfo(file, Path.GetFileName(file)));
-                }
-            }
-            catch { /* skip inaccessible folders */ }
-        }
+            CollectFiles(serverDir, pattern, results);
 
-        return results.OrderBy(f => f.FileName).ToList();
+        return results.OrderBy(f => f.RelativePath).ToList();
+    }
+
+    /// <summary>
+    /// Returns text files (JSON, XML, TXT) that exist in the server directory tree.
+    /// These are shown as raw text, not as key=value INI editors.
+    /// </summary>
+    public List<IniFileInfo> GetTextFiles(string serverDir)
+    {
+        if (string.IsNullOrWhiteSpace(serverDir) || !Directory.Exists(serverDir))
+            return new List<IniFileInfo>();
+
+        var results = new List<IniFileInfo>();
+        foreach (var pattern in TextPatterns)
+            CollectFiles(serverDir, pattern, results);
+
+        return results.OrderBy(f => f.RelativePath).ToList();
+    }
+
+    /// <summary>
+    /// Resolves a manually-specified file path into an IniFileInfo, verifying it exists.
+    /// Returns null if the file does not exist or cannot be accessed.
+    /// </summary>
+    public IniFileInfo? ResolveManualFile(string filePath, string serverDir)
+    {
+        if (!File.Exists(filePath)) return null;
+
+        // Try to make a relative path for the label
+        string rel = filePath;
+        try
+        {
+            if (!string.IsNullOrEmpty(serverDir) &&
+                filePath.StartsWith(serverDir, StringComparison.OrdinalIgnoreCase))
+            {
+                rel = filePath[serverDir.Length..].TrimStart(Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar);
+            }
+        }
+        catch { /* fall back to full path */ }
+
+        return new IniFileInfo(filePath, Path.GetFileName(filePath), rel);
+    }
+
+    private void CollectFiles(string serverDir, string pattern, List<IniFileInfo> results)
+    {
+        try
+        {
+            var histDir = HistoryDir(serverDir);
+            var files   = Directory.GetFiles(serverDir, pattern, SearchOption.AllDirectories);
+            foreach (var file in files)
+            {
+                // Skip history archives and the tool's own data folder
+                if (file.Contains(histDir, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var relative = file;
+                try
+                {
+                    if (file.StartsWith(serverDir, StringComparison.OrdinalIgnoreCase))
+                        relative = file[serverDir.Length..].TrimStart(
+                            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                catch { /* keep absolute path */ }
+
+                // Avoid duplicates (a file could match multiple patterns)
+                if (results.Any(r => r.Path.Equals(file, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                results.Add(new IniFileInfo(file, Path.GetFileName(file), relative));
+            }
+        }
+        catch { /* skip inaccessible folders */ }
     }
 
     // ─── Parsing ──────────────────────────────────────────────────────────
@@ -59,6 +132,7 @@ public class IniFileService
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';') || line.StartsWith('#'))
                 continue;
 
+            // INI section header  [SectionName]
             if (line.StartsWith('[') && line.Contains(']'))
             {
                 var closeIdx = line.IndexOf(']');
@@ -67,11 +141,19 @@ public class IniFileService
                 continue;
             }
 
-            var eq = line.IndexOf('=');
-            if (eq <= 0) continue;
+            // Key = Value  (also handles Key: Value for YAML-style)
+            int sep = line.IndexOf('=');
+            if (sep <= 0)
+            {
+                // YAML/TOML colon separator: "key: value"
+                sep = line.IndexOf(':');
+                if (sep <= 0 || line.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                             || line.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    continue;
+            }
 
-            var key = line[..eq].Trim();
-            var val = line[(eq + 1)..].Trim();
+            var key = line[..sep].Trim();
+            var val = line[(sep + 1)..].Trim();
 
             if (!string.IsNullOrEmpty(key))
                 entries.Add(new IniEntry(section, key, val, lineNum));
