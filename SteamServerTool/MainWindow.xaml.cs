@@ -14,11 +14,19 @@ namespace SteamServerTool;
 public partial class MainWindow : Window
 {
     // ─── Services ───────────────────────────────────────────────────────────
-    private readonly ServerManager   _serverManager   = new();
-    private readonly BackupService   _backupService   = new();
-    private readonly SteamCmdService _steamCmdService = new();
-    private readonly WorkshopService _workshopService = new();
-    private readonly IniFileService  _iniFileService  = new();
+    private readonly ServerManager   _serverManager    = new();
+    private readonly BackupService   _backupService    = new();
+    private readonly SteamCmdService _steamCmdService  = new();
+    private readonly WorkshopService _workshopService  = new();
+    private readonly IniFileService  _iniFileService   = new();
+    private readonly MinecraftService _minecraftService = new();
+
+    /// <summary>
+    /// Base directory for all locally-installed servers.
+    /// Defaults to a "Servers" folder next to the application executable.
+    /// </summary>
+    private static readonly string ServersBaseDir =
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Servers");
     private RconClient? _rconClient;
 
     // ─── State ──────────────────────────────────────────────────────────────
@@ -165,6 +173,19 @@ public partial class MainWindow : Window
         CfgFavorite.IsChecked           = cfg.Favorite;
         CfgBackupBeforeRestart.IsChecked = cfg.BackupBeforeRestart;
 
+        // Install/download button — label and visibility depend on server type
+        if (cfg.IsRemote)
+        {
+            BtnInstallOrDownload.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            BtnInstallOrDownload.Visibility = Visibility.Visible;
+            BtnInstallOrDownload.Content = IsMinecraftServer(cfg)
+                ? "⬇ Download Minecraft Server"
+                : "⬇ Install/Update via SteamCMD";
+        }
+
         // Mods tab
         RefreshModList(cfg);
 
@@ -306,7 +327,23 @@ public partial class MainWindow : Window
     {
         if (_selectedConfig == null) { Log("No server selected."); return; }
 
-        // Show notification/agreement dialog first
+        // Minecraft Java — download via Mojang API, no SteamCMD needed
+        if (IsMinecraftServer(_selectedConfig))
+        {
+            if (string.IsNullOrWhiteSpace(_selectedConfig.Dir))
+            {
+                Log("[WARN] Set the server directory on the Config tab before downloading.");
+                MessageBox.Show("Set the server directory on the Config tab before downloading.",
+                    "Directory Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var mcProgress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[Minecraft] {msg}")));
+            Log($"[Minecraft] Downloading server to {_selectedConfig.Dir} …");
+            _ = _minecraftService.DownloadServerAsync(_selectedConfig.Dir, mcProgress);
+            return;
+        }
+
+        // All other local servers — use SteamCMD
         var notification = new SteamCmdNotificationDialog { Owner = this };
         if (notification.ShowDialog() != true) return;
 
@@ -314,6 +351,12 @@ public partial class MainWindow : Window
         Log($"[SteamCMD] Starting install/update for {_selectedConfig.Name}...");
         _ = _steamCmdService.InstallOrUpdateServer(_selectedConfig, progress);
     }
+
+    /// <summary>Returns true when the config represents a Minecraft Java server (no SteamCMD).</summary>
+    private static bool IsMinecraftServer(ServerConfig cfg)
+        => cfg.AppId == 0 &&
+           cfg.Executable.Equals("java", StringComparison.OrdinalIgnoreCase) &&
+           cfg.LaunchArgs.Contains("server.jar", StringComparison.OrdinalIgnoreCase);
 
     // ─── Dashboard toggle ─────────────────────────────────────────────────
     private void BtnToggleView_Click(object sender, RoutedEventArgs e)
@@ -339,15 +382,18 @@ public partial class MainWindow : Window
     private void RebuildDashboard()
     {
         DashboardPanel.Children.Clear();
+        RemoteDashboardPanel.Children.Clear();
 
-        // Group servers by cluster/group
-        var groups = _serverManager.Servers
+        var localServers  = _serverManager.Servers.Where(s => !s.IsRemote).ToList();
+        var remoteServers = _serverManager.Servers.Where(s =>  s.IsRemote).ToList();
+
+        // ── LOCAL servers grouped by cluster ─────────────────────────────
+        var groups = localServers
             .GroupBy(s => string.IsNullOrEmpty(s.Group) ? "(Standalone)" : s.Group)
             .OrderBy(g => g.Key);
 
         foreach (var group in groups)
         {
-            // Group header label
             var groupLabel = new TextBlock
             {
                 Text       = group.Key,
@@ -355,7 +401,6 @@ public partial class MainWindow : Window
                 FontSize   = 11,
                 Foreground = (Brush)FindResource("DimForegroundBrush"),
                 Margin     = new Thickness(0, 12, 0, 4),
-                // Stretch to fill the wrap panel width when available
                 Width      = DashboardPanel.ActualWidth > 24 ? DashboardPanel.ActualWidth - 24 : double.NaN
             };
             DashboardPanel.Children.Add(groupLabel);
@@ -363,6 +408,120 @@ public partial class MainWindow : Window
             foreach (var cfg in group.OrderBy(s => s.Name))
                 DashboardPanel.Children.Add(BuildServerBadge(cfg));
         }
+
+        // ── REMOTE servers ────────────────────────────────────────────────
+        RemoteDashboardSection.Visibility =
+            remoteServers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var cfg in remoteServers.OrderBy(s => s.Name))
+            RemoteDashboardPanel.Children.Add(BuildRemoteServerBadge(cfg));
+    }
+
+    // ─── Add Remote Server ────────────────────────────────────────────────
+    private void BtnAddRemoteServer_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Dialogs.AddRemoteServerDialog { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.Result == null) return;
+
+        _serverManager.Servers.Add(dlg.Result);
+        PopulateServerList();
+        Log($"[Remote] Added remote server: {dlg.Result.Name} ({dlg.Result.Rcon.Host}:{dlg.Result.Rcon.Port})");
+
+        // Immediately refresh dashboard when in dashboard mode
+        if (_isDashboardMode) RebuildDashboard();
+    }
+
+    /// <summary>Builds a compact badge for a remote (RCON-only) server.</summary>
+    private Border BuildRemoteServerBadge(ServerConfig cfg)
+    {
+        // ── Header ──
+        var headerPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+        headerPanel.Children.Add(new TextBlock
+        {
+            Text     = "🌐",
+            FontSize = 20,
+            Margin   = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var remoteLabel = new TextBlock
+        {
+            Text       = "REMOTE",
+            FontSize   = 9,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("AccentBrush"),
+            Margin     = new Thickness(0, 0, 0, 1)
+        };
+        var nameBlock = new StackPanel();
+        nameBlock.Children.Add(new TextBlock
+        {
+            Text         = cfg.Name,
+            FontWeight   = FontWeights.SemiBold,
+            FontSize     = 13,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth     = 130
+        });
+        nameBlock.Children.Add(remoteLabel);
+
+        DockPanel.SetDock(nameBlock, Dock.Left);
+        headerPanel.Children.Add(nameBlock);
+
+        // ── Connection info ──
+        var infoPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        infoPanel.Children.Add(new TextBlock
+        {
+            Text       = $"Host:  {cfg.Rcon.Host}",
+            FontSize   = 11,
+            Foreground = (Brush)FindResource("DimForegroundBrush")
+        });
+        infoPanel.Children.Add(new TextBlock
+        {
+            Text       = $"RCON: {cfg.Rcon.Port}",
+            FontSize   = 11,
+            Foreground = (Brush)FindResource("DimForegroundBrush")
+        });
+
+        // ── Action buttons ──
+        var btnConfigure = new Button
+        {
+            Content = "⚙ Configure",
+            Padding = new Thickness(8, 4, 8, 4),
+            ToolTip = "Edit RCON settings (Config mode)"
+        };
+        btnConfigure.Click += (_, _) =>
+        {
+            _isDashboardMode = false;
+            DashboardView.Visibility = Visibility.Collapsed;
+            ConfigView.Visibility    = Visibility.Visible;
+            BtnToggleView.Content    = "📊 Dashboard";
+            SelectServer(cfg);
+        };
+
+        var buttonRow = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        buttonRow.Children.Add(btnConfigure);
+
+        // ── Assemble badge ──
+        var stack = new StackPanel { Margin = new Thickness(8) };
+        stack.Children.Add(headerPanel);
+        stack.Children.Add(infoPanel);
+        stack.Children.Add(buttonRow);
+
+        var badge = new Border
+        {
+            Width           = 210,
+            Background      = (Brush)FindResource("PanelBgBrush"),
+            BorderBrush     = (Brush)FindResource("AccentBrush"),   // accent border distinguishes remote
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(8),
+            Margin          = new Thickness(0, 0, 10, 10),
+            Child           = stack
+        };
+        badge.Effect = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = Colors.Black, Direction = 270,
+            ShadowDepth = 2, BlurRadius = 6, Opacity = 0.3
+        };
+        return badge;
     }
 
     private Border BuildServerBadge(ServerConfig cfg)
@@ -542,7 +701,10 @@ public partial class MainWindow : Window
             CfgExecutable.Text   = tmpl.Executable;
             CfgLaunchArgs.Text   = tmpl.LaunchArgs;
             if (!string.IsNullOrEmpty(tmpl.DefaultDir))
-                CfgDir.Text      = tmpl.DefaultDir;
+            {
+                // DefaultDir is a relative subfolder name — resolve under the local Servers dir.
+                CfgDir.Text = Path.Combine(ServersBaseDir, tmpl.DefaultDir);
+            }
             CfgRconHost.Text     = tmpl.RconHost;
             CfgRconPort.Text     = tmpl.RconPort.ToString();
             CfgQueryPort.Text    = tmpl.QueryPort.ToString();
