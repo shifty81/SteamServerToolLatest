@@ -17,9 +17,10 @@ public partial class FirstRunSetupDialog : Window
         InitializeComponent();
         _steamCmdService = steamCmdService;
 
-        // Default install dir
+        // Default install dir — use LocalApplicationData (%LOCALAPPDATA%) so that
+        // no administrator privileges are required to create the directory and write files.
         TxtInstallPath.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SteamCMD");
 
         SetBanner(found: false);
