@@ -6,16 +6,19 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using SteamServerTool.Core.Models;
 using SteamServerTool.Core.Services;
+using SteamServerTool.Dialogs;
+using Ellipse = System.Windows.Shapes.Ellipse;
 
 namespace SteamServerTool;
 
 public partial class MainWindow : Window
 {
     // ─── Services ───────────────────────────────────────────────────────────
-    private readonly ServerManager _serverManager = new();
-    private readonly BackupService _backupService = new();
-    private readonly SteamCmdService  _steamCmdService  = new();
-    private readonly WorkshopService  _workshopService  = new();
+    private readonly ServerManager   _serverManager   = new();
+    private readonly BackupService   _backupService   = new();
+    private readonly SteamCmdService _steamCmdService = new();
+    private readonly WorkshopService _workshopService = new();
+    private readonly IniFileService  _iniFileService  = new();
     private RconClient? _rconClient;
 
     // ─── State ──────────────────────────────────────────────────────────────
@@ -23,6 +26,11 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _refreshTimer;
     private const string ConfigPath = "servers.json";
     private const int MaxRconHistorySize = 100;
+    private bool _isDashboardMode = false;
+
+    // ─── INI editor state ────────────────────────────────────────────────────
+    // key: filePath → live entry list currently shown in the UI
+    private readonly Dictionary<string, List<IniEntry>> _iniEditorEntries = new();
 
     // ─── RCON command history ────────────────────────────────────────────────
     private readonly List<string> _rconHistory = new();
@@ -40,7 +48,27 @@ public partial class MainWindow : Window
         _refreshTimer.Tick += (_, _) => RefreshStatus();
         _refreshTimer.Start();
 
+        // Populate template gallery
+        TemplateList.ItemsSource = ServerTemplates.All;
+
         LoadAndPopulate();
+
+        // First-run: check SteamCMD after the window is shown
+        Loaded += async (_, _) => await CheckFirstRunAsync();
+    }
+
+    // ─── First-run SteamCMD check ─────────────────────────────────────────
+    private async Task CheckFirstRunAsync()
+    {
+        if (_steamCmdService.IsSteamCmdInstalled()) return;
+
+        var dlg = new FirstRunSetupDialog(_steamCmdService) { Owner = this };
+        dlg.ShowDialog();
+
+        if (!string.IsNullOrEmpty(dlg.ResolvedSteamCmdPath))
+            Log($"[Setup] SteamCMD configured: {dlg.ResolvedSteamCmdPath}");
+        else
+            Log("[Setup] SteamCMD not configured — install/update features will be unavailable.");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -185,6 +213,10 @@ public partial class MainWindow : Window
             foreach (var item in items)
                 item.StatusBrush = GetStatusBrush(item.Name);
         }
+
+        // Live-refresh dashboard badges
+        if (_isDashboardMode)
+            Dispatcher.InvokeAsync(RebuildDashboard);
     }
 
     private void UpdateStatusSummary()
@@ -274,9 +306,535 @@ public partial class MainWindow : Window
     {
         if (_selectedConfig == null) { Log("No server selected."); return; }
 
+        // Show notification/agreement dialog first
+        var notification = new SteamCmdNotificationDialog { Owner = this };
+        if (notification.ShowDialog() != true) return;
+
         var progress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[SteamCMD] {msg}")));
         Log($"[SteamCMD] Starting install/update for {_selectedConfig.Name}...");
         _ = _steamCmdService.InstallOrUpdateServer(_selectedConfig, progress);
+    }
+
+    // ─── Dashboard toggle ─────────────────────────────────────────────────
+    private void BtnToggleView_Click(object sender, RoutedEventArgs e)
+    {
+        _isDashboardMode = !_isDashboardMode;
+
+        if (_isDashboardMode)
+        {
+            DashboardView.Visibility = Visibility.Visible;
+            ConfigView.Visibility    = Visibility.Collapsed;
+            BtnToggleView.Content    = "⚙ Config Mode";
+            RebuildDashboard();
+        }
+        else
+        {
+            DashboardView.Visibility = Visibility.Collapsed;
+            ConfigView.Visibility    = Visibility.Visible;
+            BtnToggleView.Content    = "📊 Dashboard";
+        }
+    }
+
+    // ─── Dashboard ────────────────────────────────────────────────────────
+    private void RebuildDashboard()
+    {
+        DashboardPanel.Children.Clear();
+
+        // Group servers by cluster/group
+        var groups = _serverManager.Servers
+            .GroupBy(s => string.IsNullOrEmpty(s.Group) ? "(Standalone)" : s.Group)
+            .OrderBy(g => g.Key);
+
+        foreach (var group in groups)
+        {
+            // Group header label
+            var groupLabel = new TextBlock
+            {
+                Text       = group.Key,
+                FontWeight = FontWeights.SemiBold,
+                FontSize   = 11,
+                Foreground = (Brush)FindResource("DimForegroundBrush"),
+                Margin     = new Thickness(0, 12, 0, 4),
+                // Stretch to fill the wrap panel width when available
+                Width      = DashboardPanel.ActualWidth > 24 ? DashboardPanel.ActualWidth - 24 : double.NaN
+            };
+            DashboardPanel.Children.Add(groupLabel);
+
+            foreach (var cfg in group.OrderBy(s => s.Name))
+                DashboardPanel.Children.Add(BuildServerBadge(cfg));
+        }
+    }
+
+    private Border BuildServerBadge(ServerConfig cfg)
+    {
+        var status     = _serverManager.GetStatus(cfg.Name);
+        var statusBrush = GetStatusBrush(cfg.Name);
+        var isRunning  = _serverManager.IsRunning(cfg.Name);
+        var memMb      = isRunning ? _serverManager.GetMemoryMb(cfg.Name) : 0;
+        var cpuPct     = isRunning ? _serverManager.GetCpuPercent(cfg.Name) : 0;
+
+        // Find template icon
+        var template  = ServerTemplates.All.FirstOrDefault(t =>
+            t.AppId == cfg.AppId && t.AppId != 0);
+        var icon = template?.Icon ?? "🖥️";
+
+        // ── Status dot ──
+        var dot = new Ellipse
+        {
+            Width  = 10, Height = 10,
+            Fill   = statusBrush,
+            Margin = new Thickness(0, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        // ── Header row ──
+        var headerPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+        headerPanel.Children.Add(new TextBlock
+        {
+            Text     = icon,
+            FontSize = 22,
+            Margin   = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var nameBlock = new StackPanel();
+        nameBlock.Children.Add(new TextBlock
+        {
+            Text       = cfg.Name,
+            FontWeight = FontWeights.SemiBold,
+            FontSize   = 13,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth   = 140
+        });
+        nameBlock.Children.Add(new TextBlock
+        {
+            Text       = status.ToString(),
+            FontSize   = 11,
+            Foreground = statusBrush
+        });
+        DockPanel.SetDock(nameBlock, Dock.Left);
+        headerPanel.Children.Add(nameBlock);
+
+        // ── Metrics ──
+        var metricsPanel = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        metricsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        metricsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        metricsPanel.RowDefinitions.Add(new RowDefinition());
+        metricsPanel.RowDefinitions.Add(new RowDefinition());
+
+        void AddMetric(string label, string val, int row, int col)
+        {
+            var sp = new StackPanel { Margin = new Thickness(0, 0, 4, 4) };
+            sp.Children.Add(new TextBlock { Text = label, FontSize = 10,
+                Foreground = (Brush)FindResource("DimForegroundBrush") });
+            sp.Children.Add(new TextBlock { Text = val, FontSize = 12, FontWeight = FontWeights.SemiBold });
+            Grid.SetRow(sp, row);
+            Grid.SetColumn(sp, col);
+            metricsPanel.Children.Add(sp);
+        }
+
+        AddMetric("CPU",     isRunning ? $"{cpuPct:F1}%" : "—",    0, 0);
+        AddMetric("Memory",  isRunning ? $"{memMb} MB"  : "—",    0, 1);
+        AddMetric("Players", cfg.MaxPlayers > 0 ? $"/ {cfg.MaxPlayers}" : "—", 1, 0);
+        AddMetric("Group",   string.IsNullOrEmpty(cfg.Group) ? "Standalone" : cfg.Group, 1, 1);
+
+        // ── Action buttons ──
+        var btnStart = new Button
+        {
+            Content = "▶",
+            Padding = new Thickness(8, 4, 8, 4),
+            Style   = (Style)FindResource("AccentButton"),
+            Margin  = new Thickness(0, 0, 4, 0),
+            ToolTip = "Start"
+        };
+        btnStart.Click += (_, _) => TryStartServer(cfg);
+
+        var btnStop = new Button
+        {
+            Content = "■",
+            Padding = new Thickness(8, 4, 8, 4),
+            Style   = (Style)FindResource("DangerButton"),
+            Margin  = new Thickness(0, 0, 4, 0),
+            ToolTip = "Stop"
+        };
+        btnStop.Click += (_, _) => TryStopServer(cfg.Name);
+
+        var btnBackup = new Button
+        {
+            Content = "💾",
+            Padding = new Thickness(8, 4, 8, 4),
+            Margin  = new Thickness(0, 0, 4, 0),
+            ToolTip = "Backup"
+        };
+        btnBackup.Click += (_, _) =>
+        {
+            try
+            {
+                var path = _backupService.CreateBackup(cfg);
+                Log($"[Backup] {cfg.Name}: {path}");
+            }
+            catch (Exception ex) { Log($"[ERROR] Backup {cfg.Name}: {ex.Message}"); }
+        };
+
+        var btnConfigure = new Button
+        {
+            Content = "⚙",
+            Padding = new Thickness(8, 4, 8, 4),
+            ToolTip = "Configure (switch to Config mode)"
+        };
+        btnConfigure.Click += (_, _) =>
+        {
+            _isDashboardMode = false;
+            DashboardView.Visibility = Visibility.Collapsed;
+            ConfigView.Visibility    = Visibility.Visible;
+            BtnToggleView.Content    = "📊 Dashboard";
+            SelectServer(cfg);
+        };
+
+        var buttonRow = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        buttonRow.Children.Add(btnStart);
+        buttonRow.Children.Add(btnStop);
+        buttonRow.Children.Add(btnBackup);
+        buttonRow.Children.Add(btnConfigure);
+
+        // ── Assemble badge ──
+        var stack = new StackPanel { Margin = new Thickness(8) };
+        stack.Children.Add(headerPanel);
+        stack.Children.Add(metricsPanel);
+        stack.Children.Add(buttonRow);
+
+        var badge = new Border
+        {
+            Width           = 210,
+            Background      = (Brush)FindResource("PanelBgBrush"),
+            BorderBrush     = (Brush)FindResource("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(8),
+            Margin          = new Thickness(0, 0, 10, 10),
+            Child           = stack
+        };
+        badge.Effect = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = Colors.Black, Direction = 270,
+            ShadowDepth = 2, BlurRadius = 6, Opacity = 0.3
+        };
+
+        return badge;
+    }
+
+    // ─── Template application ─────────────────────────────────────────────
+    private void BtnApplyTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is ServerTemplate tmpl)
+        {
+            if (_selectedConfig == null)
+            {
+                Log("Select or create a server first, then choose a template.");
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"Apply template '{tmpl.Name}'?\nThis will overwrite the current config fields.",
+                "Apply Template", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+
+            // Fill form fields from template
+            CfgAppId.Text        = tmpl.AppId > 0 ? tmpl.AppId.ToString() : "";
+            CfgExecutable.Text   = tmpl.Executable;
+            CfgLaunchArgs.Text   = tmpl.LaunchArgs;
+            if (!string.IsNullOrEmpty(tmpl.DefaultDir))
+                CfgDir.Text      = tmpl.DefaultDir;
+            CfgRconHost.Text     = tmpl.RconHost;
+            CfgRconPort.Text     = tmpl.RconPort.ToString();
+            CfgQueryPort.Text    = tmpl.QueryPort.ToString();
+            CfgMaxPlayers.Text   = tmpl.MaxPlayers.ToString();
+            if (!string.IsNullOrEmpty(tmpl.Group))
+                CfgGroup.Text    = tmpl.Group;
+
+            Log($"Template '{tmpl.Name}' applied — review fields and click 'Apply Config Changes'.");
+        }
+    }
+
+    // ─── Config Files (INI editor) tab ────────────────────────────────────
+    private void TabConfigFiles_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig != null)
+            LoadIniFileTabs(_selectedConfig);
+    }
+
+    private void BtnRescanConfigFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig != null)
+            LoadIniFileTabs(_selectedConfig);
+    }
+
+    private void LoadIniFileTabs(ServerConfig cfg)
+    {
+        IniFileTabs.Items.Clear();
+        _iniEditorEntries.Clear();
+
+        if (string.IsNullOrEmpty(cfg.Dir) || !Directory.Exists(cfg.Dir))
+        {
+            var placeholder = new TabItem { Header = "No directory set" };
+            placeholder.Content = new TextBlock
+            {
+                Text = "Server directory is not configured or does not exist.",
+                Margin = new Thickness(16),
+                Foreground = (Brush)FindResource("DimForegroundBrush")
+            };
+            IniFileTabs.Items.Add(placeholder);
+            return;
+        }
+
+        var files = _iniFileService.GetConfigFiles(cfg.Dir);
+        if (files.Count == 0)
+        {
+            var placeholder = new TabItem { Header = "No config files found" };
+            placeholder.Content = new TextBlock
+            {
+                Text = "No *.ini or *.cfg files were found in the server directory.",
+                Margin = new Thickness(16),
+                Foreground = (Brush)FindResource("DimForegroundBrush")
+            };
+            IniFileTabs.Items.Add(placeholder);
+            return;
+        }
+
+        foreach (var fileInfo in files)
+        {
+            var entries = _iniFileService.ParseFile(fileInfo.Path);
+            _iniEditorEntries[fileInfo.Path] = entries;
+
+            var tab = new TabItem { Header = fileInfo.FileName };
+            tab.Content = BuildIniEditorPanel(fileInfo.Path, entries, cfg);
+            IniFileTabs.Items.Add(tab);
+        }
+
+        if (IniFileTabs.Items.Count > 0)
+            IniFileTabs.SelectedIndex = 0;
+    }
+
+    private UIElement BuildIniEditorPanel(string filePath, List<IniEntry> entries, ServerConfig cfg)
+    {
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        // ── Toolbar ──
+        var toolbar = new DockPanel { Margin = new Thickness(8, 8, 8, 4) };
+
+        var historyCombo = new ComboBox
+        {
+            Width = 260, Margin = new Thickness(0, 0, 8, 0),
+            ToolTip = "Revert to a previous version"
+        };
+        var history = _iniFileService.GetHistory(filePath, cfg.Dir);
+        foreach (var h in history)
+            historyCombo.Items.Add(new ComboBoxItem
+            {
+                Content = Path.GetFileName(h),
+                Tag     = h
+            });
+        DockPanel.SetDock(historyCombo, Dock.Left);
+        toolbar.Children.Add(historyCombo);
+
+        var btnRevert = new Button
+        {
+            Content = "↩ Revert",
+            Margin  = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(10, 4, 10, 4)
+        };
+        btnRevert.Click += (_, _) =>
+        {
+            if (historyCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string histPath)
+            {
+                var r = MessageBox.Show(
+                    $"Revert '{Path.GetFileName(filePath)}' to:\n{Path.GetFileName(histPath)}?",
+                    "Confirm Revert", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (r != MessageBoxResult.Yes) return;
+                try
+                {
+                    _iniFileService.RevertToHistory(filePath, histPath);
+                    Log($"[INI] Reverted {Path.GetFileName(filePath)} to {Path.GetFileName(histPath)}.");
+                    LoadIniFileTabs(cfg);
+                }
+                catch (Exception ex) { Log($"[ERROR] Revert: {ex.Message}"); }
+            }
+            else
+            {
+                MessageBox.Show("Select a history version from the dropdown first.",
+                    "No version selected", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        };
+        DockPanel.SetDock(btnRevert, Dock.Left);
+        toolbar.Children.Add(btnRevert);
+
+        var btnSave = new Button
+        {
+            Content = "💾 Save Changes",
+            Style   = (Style)FindResource("AccentButton"),
+            Margin  = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(10, 4, 10, 4)
+        };
+        btnSave.Click += (_, _) =>
+        {
+            try
+            {
+                _iniFileService.SaveFile(filePath, _iniEditorEntries[filePath]);
+                Log($"[INI] Saved {Path.GetFileName(filePath)} (previous version archived).");
+                // refresh history dropdown
+                historyCombo.Items.Clear();
+                foreach (var h in _iniFileService.GetHistory(filePath, cfg.Dir))
+                    historyCombo.Items.Add(new ComboBoxItem
+                    {
+                        Content = Path.GetFileName(h),
+                        Tag     = h
+                    });
+            }
+            catch (Exception ex) { Log($"[ERROR] Save INI: {ex.Message}"); }
+        };
+        DockPanel.SetDock(btnSave, Dock.Right);
+        toolbar.Children.Add(btnSave);
+
+        Grid.SetRow(toolbar, 0);
+        root.Children.Add(toolbar);
+
+        // ── Entry list ──
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var stack  = new StackPanel { Margin = new Thickness(8) };
+
+        string? lastSection = null;
+        foreach (var entry in entries)
+        {
+            if (entry.Section != lastSection)
+            {
+                if (lastSection != null)
+                    stack.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 6) });
+                if (!string.IsNullOrEmpty(entry.Section))
+                    stack.Children.Add(new TextBlock
+                    {
+                        Text       = $"[{entry.Section}]",
+                        FontWeight = FontWeights.SemiBold,
+                        FontSize   = 11,
+                        Foreground = (Brush)FindResource("AccentBrush"),
+                        Margin     = new Thickness(0, 4, 0, 4)
+                    });
+                lastSection = entry.Section;
+            }
+
+            stack.Children.Add(BuildIniEntryRow(entry, _iniEditorEntries[filePath]));
+        }
+
+        scroll.Content = stack;
+        Grid.SetRow(scroll, 1);
+        root.Children.Add(scroll);
+
+        return root;
+    }
+
+    private static readonly HashSet<string> BoolTrueValues  = new(StringComparer.OrdinalIgnoreCase)
+        { "true", "yes", "1", "on", "enabled" };
+    private static readonly HashSet<string> BoolFalseValues = new(StringComparer.OrdinalIgnoreCase)
+        { "false", "no", "0", "off", "disabled" };
+
+    private UIElement BuildIniEntryRow(IniEntry entry, List<IniEntry> liveList)
+    {
+        var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var keyLabel = new TextBlock
+        {
+            Text      = entry.Key,
+            ToolTip   = $"Section: [{entry.Section}]  Line: {entry.LineNumber}",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin    = new Thickness(0, 0, 8, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Grid.SetColumn(keyLabel, 0);
+        row.Children.Add(keyLabel);
+
+        // Determine best control type
+        bool isBool = BoolTrueValues.Contains(entry.Value) || BoolFalseValues.Contains(entry.Value);
+        int intVal  = 0;
+        bool isInt  = !isBool && int.TryParse(entry.Value, out intVal);
+
+        UIElement valueControl;
+
+        if (isBool)
+        {
+            // Capture the original value format once (numeric "1"/"0" vs text "True"/"False")
+            bool usesNumericFormat = entry.Value == "1" || entry.Value == "0";
+            string trueVal  = usesNumericFormat ? "1" : "True";
+            string falseVal = usesNumericFormat ? "0" : "False";
+
+            var toggle = new CheckBox
+            {
+                IsChecked = BoolTrueValues.Contains(entry.Value),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            toggle.Checked   += (_, _) => UpdateEntry(liveList, entry, trueVal);
+            toggle.Unchecked += (_, _) => UpdateEntry(liveList, entry, falseVal);
+            valueControl = toggle;
+        }
+        else if (isInt)
+        {
+            var panel = new DockPanel();
+            var slider = new Slider
+            {
+                Minimum = 0, Maximum = Math.Max(intVal * 4, 1000),
+                Value = intVal, Width = 120,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var numBox = new TextBox
+            {
+                Text  = intVal.ToString(),
+                Width = 70,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            slider.ValueChanged += (_, _) =>
+            {
+                var v = (int)slider.Value;
+                numBox.Text = v.ToString();
+                UpdateEntry(liveList, entry, v.ToString());
+            };
+            numBox.TextChanged += (_, _) =>
+            {
+                if (int.TryParse(numBox.Text, out var parsed))
+                {
+                    slider.Value = Math.Min(parsed, slider.Maximum);
+                    UpdateEntry(liveList, entry, parsed.ToString());
+                }
+            };
+            DockPanel.SetDock(slider, Dock.Left);
+            panel.Children.Add(slider);
+            panel.Children.Add(numBox);
+            valueControl = panel;
+        }
+        else
+        {
+            var textBox = new TextBox
+            {
+                Text = entry.Value,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            textBox.TextChanged += (_, _) => UpdateEntry(liveList, entry, textBox.Text);
+            valueControl = textBox;
+        }
+
+        Grid.SetColumn(valueControl, 1);
+        row.Children.Add(valueControl);
+        return row;
+    }
+
+    private static void UpdateEntry(List<IniEntry> list, IniEntry original, string newValue)
+    {
+        var idx = list.FindIndex(e => e.Section == original.Section &&
+                                      e.Key == original.Key &&
+                                      e.LineNumber == original.LineNumber);
+        if (idx >= 0)
+            list[idx] = original with { Value = newValue };
     }
 
     // ═══════════════════════════════════════════════════════════════════════

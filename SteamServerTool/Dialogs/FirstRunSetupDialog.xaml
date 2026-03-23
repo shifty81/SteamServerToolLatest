@@ -1,0 +1,115 @@
+<Window x:Class="SteamServerTool.Dialogs.FirstRunSetupDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Welcome to Steam Server Tool — First-Run Setup"
+        Height="500" Width="600"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource DarkBgBrush}"
+        Foreground="{StaticResource ForegroundBrush}"
+        FontFamily="Segoe UI" FontSize="13">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Welcome header -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="⚙ Steam Server Tool"
+                       FontSize="22" FontWeight="Bold"
+                       Foreground="{StaticResource AccentBrush}"/>
+            <TextBlock Text="First-run setup — SteamCMD"
+                       FontSize="14" Foreground="{StaticResource DimForegroundBrush}"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Status banner -->
+        <Border Grid.Row="2"
+                x:Name="BannerBorder"
+                Background="#1A3A1A"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1" CornerRadius="6"
+                Padding="14,10">
+            <DockPanel>
+                <TextBlock x:Name="BannerIcon" DockPanel.Dock="Left"
+                           Text="⚠" FontSize="18"
+                           Foreground="#E0A020"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock x:Name="BannerText"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Install path row -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Label Grid.Column="0" Content="Install to:" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" x:Name="TxtInstallPath"
+                     VerticalAlignment="Center"
+                     Tag="e.g. C:\steamcmd"/>
+            <Button Grid.Column="3" Content="Browse…"
+                    Padding="10,6"
+                    Click="BtnBrowse_Click"/>
+        </Grid>
+
+        <!-- Progress log -->
+        <TextBox Grid.Row="6"
+                 x:Name="TxtProgress"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto"
+                 FontFamily="Consolas" FontSize="11"
+                 Background="#1A1A1A"
+                 Foreground="#C8F08F"
+                 BorderThickness="1"
+                 BorderBrush="{StaticResource BorderBrush}"/>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="2"
+                    x:Name="BtnLocate"
+                    Content="📂 Locate Existing…"
+                    Padding="14,8"
+                    Click="BtnLocate_Click"/>
+
+            <Button Grid.Column="4"
+                    x:Name="BtnDownload"
+                    Content="⬇ Download &amp; Install SteamCMD"
+                    Padding="14,8"
+                    Style="{StaticResource AccentButton}"
+                    Click="BtnDownload_Click"/>
+
+            <Button Grid.Column="6"
+                    x:Name="BtnSkip"
+                    Content="Skip for Now"
+                    Padding="14,8"
+                    Click="BtnSkip_Click"/>
+        </Grid>
+    </Grid>
+</Window>
