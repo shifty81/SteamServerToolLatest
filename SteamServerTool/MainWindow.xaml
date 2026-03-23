@@ -480,6 +480,8 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox Grid.Column="0" x:Name="TxtModId" Tag="Mod ID (Workshop)"/>
                                     <Button  Grid.Column="2" Content="＋ Add"     Click="BtnAddMod_Click"/>
@@ -488,6 +490,9 @@
                                     <Button  Grid.Column="6" Content="⊘ Disable"  Click="BtnDisableMod_Click"/>
                                     <Button  Grid.Column="8" Content="⬇ Update"   Click="BtnUpdateMod_Click"
                                              Style="{StaticResource AccentButton}"/>
+                                    <Button  Grid.Column="10" Content="🔍 Browse Workshop"
+                                             Style="{StaticResource AccentButton}"
+                                             Click="BtnBrowseWorkshop_Click"/>
                                 </Grid>
                             </Grid>
                         </TabItem>

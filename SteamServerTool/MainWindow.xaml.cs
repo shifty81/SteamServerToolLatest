@@ -14,7 +14,8 @@ public partial class MainWindow : Window
     // ─── Services ───────────────────────────────────────────────────────────
     private readonly ServerManager _serverManager = new();
     private readonly BackupService _backupService = new();
-    private readonly SteamCmdService _steamCmdService = new();
+    private readonly SteamCmdService  _steamCmdService  = new();
+    private readonly WorkshopService  _workshopService  = new();
     private RconClient? _rconClient;
 
     // ─── State ──────────────────────────────────────────────────────────────
@@ -497,6 +498,39 @@ public partial class MainWindow : Window
         var progress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[SteamCMD] {msg}")));
         Log($"[SteamCMD] Updating mod {item.ModId} for {_selectedConfig.Name}...");
         _ = _steamCmdService.UpdateMod(_selectedConfig, item.ModId, progress);
+    }
+
+    private void BtnBrowseWorkshop_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedConfig == null) { Log("No server selected."); return; }
+        if (_selectedConfig.AppId <= 0)
+        {
+            Log("[WARN] Server has no App ID set. Configure the App ID on the Config tab first.");
+            MessageBox.Show("Set the App ID on the Config tab before browsing the Workshop.",
+                "App ID required", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var browser = new WorkshopBrowserWindow(_selectedConfig.AppId) { Owner = this };
+        if (browser.ShowDialog() != true) return;
+
+        var added = 0;
+        foreach (var id in browser.SelectedIds)
+        {
+            if (_selectedConfig.Mods.Contains(id) || _selectedConfig.DisabledMods.Contains(id))
+            {
+                Log($"Mod {id} already in list, skipped.");
+                continue;
+            }
+            _selectedConfig.Mods.Add(id);
+            added++;
+        }
+
+        if (added > 0)
+        {
+            RefreshModList(_selectedConfig);
+            Log($"Added {added} mod(s) from Workshop browser.");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
