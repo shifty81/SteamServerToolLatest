@@ -17,12 +17,27 @@ public partial class FirstRunSetupDialog : Window
         InitializeComponent();
         _steamCmdService = steamCmdService;
 
-        // Default install dir
-        TxtInstallPath.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "SteamCMD");
+        bool alreadyInstalled = steamCmdService.IsSteamCmdInstalled()
+                                && File.Exists(steamCmdService.SteamCmdPath);
 
-        SetBanner(found: false);
+        if (alreadyInstalled)
+        {
+            // Pre-fill directory and show "found" banner so the user can see
+            // the current location and optionally re-install or change it.
+            var dir = Path.GetDirectoryName(steamCmdService.SteamCmdPath) ?? "";
+            TxtInstallPath.Text  = dir;
+            ResolvedSteamCmdPath = steamCmdService.SteamCmdPath;
+            SetBanner(found: true, customText: $"SteamCMD is already installed at: {steamCmdService.SteamCmdPath}");
+            BtnSkip.Content = "Close";   // more accurate label when already configured
+        }
+        else
+        {
+            // Default install dir — LocalApplicationData so no elevation is required.
+            TxtInstallPath.Text = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SteamCMD");
+            SetBanner(found: false);
+        }
     }
 
     // ─── Banner helper ────────────────────────────────────────────────────

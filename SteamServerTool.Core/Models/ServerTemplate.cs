@@ -2,18 +2,26 @@ namespace SteamServerTool.Core.Models;
 
 public class ServerTemplate
 {
-    public string Name        { get; set; } = "";
-    public string Icon        { get; set; } = "🎮";
-    public string Description { get; set; } = "";
-    public int    AppId       { get; set; }
-    public string Executable  { get; set; } = "";
-    public string LaunchArgs  { get; set; } = "";
-    public string DefaultDir  { get; set; } = "";
-    public int    RconPort    { get; set; } = 27020;
-    public int    QueryPort   { get; set; } = 27015;
-    public int    MaxPlayers  { get; set; } = 0;
-    public string Group       { get; set; } = "";
-    public string RconHost    { get; set; } = "127.0.0.1";
+    public string Name             { get; set; } = "";
+    public string Icon             { get; set; } = "🎮";
+    public string Description      { get; set; } = "";
+    public int    AppId            { get; set; }
+    public string Executable       { get; set; } = "";
+    public string LaunchArgs       { get; set; } = "";
+    /// <summary>
+    /// Subfolder name only (e.g. "ark_sa").  The UI resolves this against the
+    /// user's base Servers directory at template-apply time.
+    /// </summary>
+    public string DefaultDir       { get; set; } = "";
+    public int    RconPort         { get; set; } = 27020;
+    public int    QueryPort        { get; set; } = 27015;
+    public int    MaxPlayers       { get; set; } = 0;
+    public string Group            { get; set; } = "";
+    public string RconHost         { get; set; } = "127.0.0.1";
+    /// <summary>
+    /// When false the server is not installed/updated via SteamCMD (e.g. Minecraft Java).
+    /// </summary>
+    public bool   RequiresSteamCmd { get; set; } = true;
 }
 
 /// <summary>Built-in server template library.</summary>
@@ -29,7 +37,7 @@ public static class ServerTemplates
             AppId       = 2430930,
             Executable  = "ShooterGameServer",
             LaunchArgs  = "TheIsland_WP?listen?MaxPlayers=70 -server -log",
-            DefaultDir  = @"C:\Servers\ark_sa",
+            DefaultDir  = "ark_sa",
             RconPort    = 27020,
             QueryPort   = 27015,
             MaxPlayers  = 70,
@@ -42,7 +50,7 @@ public static class ServerTemplates
             AppId       = 376030,
             Executable  = "ShooterGameServer",
             LaunchArgs  = "TheIsland?listen?MaxPlayers=70 -server -log",
-            DefaultDir  = @"C:\Servers\ark_se",
+            DefaultDir  = "ark_se",
             RconPort    = 27020,
             QueryPort   = 27015,
             MaxPlayers  = 70,
@@ -55,7 +63,7 @@ public static class ServerTemplates
             AppId       = 730,
             Executable  = "cs2",
             LaunchArgs  = "-dedicated +map de_dust2 +maxplayers 20",
-            DefaultDir  = @"C:\Servers\cs2",
+            DefaultDir  = "cs2",
             RconPort    = 27015,
             QueryPort   = 27015,
             MaxPlayers  = 20,
@@ -68,7 +76,7 @@ public static class ServerTemplates
             AppId       = 896660,
             Executable  = "valheim_server",
             LaunchArgs  = "-name \"My Server\" -port 2456 -world \"Dedicated\" -password \"secret\" -nographics -batchmode",
-            DefaultDir  = @"C:\Servers\valheim",
+            DefaultDir  = "valheim",
             RconPort    = 2457,
             QueryPort   = 2456,
             MaxPlayers  = 10,
@@ -81,7 +89,7 @@ public static class ServerTemplates
             AppId       = 258550,
             Executable  = "RustDedicated",
             LaunchArgs  = "-batchmode +server.hostname \"My Rust Server\" +server.maxplayers 100 +server.worldsize 3500 +rcon.web 1 +rcon.port 28016",
-            DefaultDir  = @"C:\Servers\rust",
+            DefaultDir  = "rust",
             RconPort    = 28016,
             QueryPort   = 28015,
             MaxPlayers  = 100,
@@ -94,23 +102,24 @@ public static class ServerTemplates
             AppId       = 294420,
             Executable  = "7DaysToDieServer",
             LaunchArgs  = "-configfile=serverconfig.xml -dedicated",
-            DefaultDir  = @"C:\Servers\7dtd",
+            DefaultDir  = "7dtd",
             RconPort    = 8081,
             QueryPort   = 26900,
             MaxPlayers  = 8,
         },
         new()
         {
-            Name        = "Minecraft Java",
-            Icon        = "⛏️",
-            Description = "Minecraft Java Edition server (requires JRE)",
-            AppId       = 0,
-            Executable  = "java",
-            LaunchArgs  = "-Xmx4G -Xms2G -jar server.jar nogui",
-            DefaultDir  = @"C:\Servers\minecraft",
-            RconPort    = 25575,
-            QueryPort   = 25565,
-            MaxPlayers  = 20,
+            Name             = "Minecraft Java",
+            Icon             = "⛏️",
+            Description      = "Minecraft Java Edition server (requires JRE — no SteamCMD)",
+            AppId            = 0,
+            Executable       = "java",
+            LaunchArgs       = "-Xmx4G -Xms2G -jar server.jar nogui",
+            DefaultDir       = "minecraft",
+            RconPort         = 25575,
+            QueryPort        = 25565,
+            MaxPlayers       = 20,
+            RequiresSteamCmd = false,
         },
         new()
         {
@@ -120,7 +129,7 @@ public static class ServerTemplates
             AppId       = 2278520,
             Executable  = "enshrouded_server",
             LaunchArgs  = "",
-            DefaultDir  = @"C:\Servers\enshrouded",
+            DefaultDir  = "enshrouded",
             RconPort    = 11002,
             QueryPort   = 15636,
             MaxPlayers  = 16,
@@ -133,7 +142,7 @@ public static class ServerTemplates
             AppId       = 1829350,
             Executable  = "VRisingServer",
             LaunchArgs  = "-persistentDataPath .\\save-data -serverName \"My V Rising Server\"",
-            DefaultDir  = @"C:\Servers\vrising",
+            DefaultDir  = "vrising",
             RconPort    = 25575,
             QueryPort   = 9876,
             MaxPlayers  = 40,
@@ -146,10 +155,24 @@ public static class ServerTemplates
             AppId       = 2394010,
             Executable  = "PalServer",
             LaunchArgs  = "-port=8211 -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS",
-            DefaultDir  = @"C:\Servers\palworld",
+            DefaultDir  = "palworld",
             RconPort    = 25575,
             QueryPort   = 8211,
             MaxPlayers  = 32,
+        },
+        new()
+        {
+            Name             = "Vintage Story",
+            Icon             = "🪨",
+            Description      = "Vintage Story dedicated server (no SteamCMD — downloaded from vintagestory.at)",
+            AppId            = 0,
+            Executable       = OperatingSystem.IsWindows() ? "VintagestoryServer.exe" : "VintagestoryServer",
+            LaunchArgs       = "--dataPath ./data --port 42420 --maxclients 16",
+            DefaultDir       = "vintagestory",
+            RconPort         = 42425,
+            QueryPort        = 42420,
+            MaxPlayers       = 16,
+            RequiresSteamCmd = false,
         },
         new()
         {

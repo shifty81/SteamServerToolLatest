@@ -36,14 +36,16 @@
 
                 <!-- Left: action buttons -->
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnNewServer"   Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
-                    <Button x:Name="BtnRefresh"     Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
-                    <Button x:Name="BtnStartAll"    Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
+                    <Button x:Name="BtnNewServer"      Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
+                    <Button x:Name="BtnRefresh"        Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
+                    <Button x:Name="BtnStartAll"       Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
                             Style="{StaticResource AccentButton}"/>
-                    <Button x:Name="BtnStopAll"     Content="■ Stop All"    Margin="0,0,6,0" Click="BtnStopAll_Click"
+                    <Button x:Name="BtnStopAll"        Content="■ Stop All"    Margin="0,0,6,0" Click="BtnStopAll_Click"
                             Style="{StaticResource DangerButton}"/>
-                    <Button x:Name="BtnSaveConfig"  Content="💾 Save"       Margin="0,0,6,0" Click="BtnSaveConfig_Click"/>
-                    <Button x:Name="BtnToggleView"  Content="📊 Dashboard"  Margin="0,0,6,0" Click="BtnToggleView_Click"/>
+                    <Button x:Name="BtnSaveConfig"     Content="💾 Save"       Margin="0,0,6,0" Click="BtnSaveConfig_Click"/>
+                    <Button x:Name="BtnToggleView"     Content="📊 Dashboard"  Margin="0,0,6,0" Click="BtnToggleView_Click"/>
+                    <Button x:Name="BtnSetupSteamCmd"  Content="⚙ SteamCMD"   Margin="0,0,6,0" Click="BtnSetupSteamCmd_Click"
+                            ToolTip="Download or re-configure SteamCMD"/>
                 </StackPanel>
 
                 <!-- Right: status summary -->
@@ -75,17 +77,58 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
+
+                    <!-- Dashboard header with "Add Remote Server" action -->
                     <Border Grid.Row="0"
                             Background="{StaticResource ControlBgBrush}"
                             BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="0,0,0,1" Padding="14,10">
-                        <TextBlock Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
-                                   Foreground="{StaticResource DimForegroundBrush}"/>
+                            BorderThickness="0,0,0,1" Padding="14,8">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
+                                       Foreground="{StaticResource DimForegroundBrush}"
+                                       VerticalAlignment="Center"/>
+                            <Button DockPanel.Dock="Right"
+                                    Content="＋ Add Remote Server"
+                                    Padding="10,4"
+                                    Click="BtnAddRemoteServer_Click"
+                                    ToolTip="Add a remote server monitored via RCON"/>
+                        </DockPanel>
                     </Border>
+
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <WrapPanel x:Name="DashboardPanel"
-                                   Orientation="Horizontal"
-                                   Margin="12"/>
+                        <StackPanel Margin="12">
+
+                            <!-- ── LOCAL servers ── -->
+                            <TextBlock x:Name="TxtDashLocalHeader"
+                                       Text="LOCAL SERVERS"
+                                       FontWeight="SemiBold" FontSize="10"
+                                       Foreground="{StaticResource DimForegroundBrush}"
+                                       Margin="0,0,0,6"/>
+                            <WrapPanel x:Name="DashboardPanel" Orientation="Horizontal"/>
+
+                            <!-- ── REMOTE servers separator ── -->
+                            <Border x:Name="RemoteDashboardSection"
+                                    Visibility="Collapsed"
+                                    Margin="0,16,0,0">
+                                <StackPanel>
+                                    <DockPanel Margin="0,0,0,6">
+                                        <Rectangle DockPanel.Dock="Left"
+                                                   Width="3" Height="12"
+                                                   RadiusX="1.5" RadiusY="1.5"
+                                                   Fill="{StaticResource AccentBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,7,0"/>
+                                        <TextBlock Text="REMOTE SERVERS"
+                                                   FontWeight="SemiBold" FontSize="10"
+                                                   Foreground="{StaticResource DimForegroundBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                    <WrapPanel x:Name="RemoteDashboardPanel" Orientation="Horizontal"/>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
                     </ScrollViewer>
                 </Grid>
             </Border>
@@ -510,7 +553,8 @@
                                                     Style="{StaticResource AccentButton}"
                                                     Click="BtnApplyConfig_Click"
                                                     Margin="0,0,10,0"/>
-                                            <Button Content="⬇ Install/Update via SteamCMD"
+                                            <Button x:Name="BtnInstallOrDownload"
+                                                    Content="⬇ Install/Update via SteamCMD"
                                                     Click="BtnInstallSteamCmd_Click"/>
                                         </StackPanel>
                                     </StackPanel>

@@ -106,13 +106,35 @@ public class ServerConfig
     [JsonPropertyName("lastCrashTime")]
     public string LastCrashTime { get; set; } = "";
 
+    [JsonPropertyName("isRemote")]
+    public bool IsRemote { get; set; } = false;
+
+    /// <summary>
+    /// Identifies the install/download mechanism for this server.
+    /// Set automatically when a template is applied.
+    /// Well-known values: "" or "steamcmd" (default), "minecraft", "vintagestory".
+    /// </summary>
+    [JsonPropertyName("serverType")]
+    public string ServerType { get; set; } = "";
+
     public (bool IsValid, string Error) Validate()
     {
         if (string.IsNullOrWhiteSpace(Name)) return (false, "Name is required.");
-        if (AppId <= 0) return (false, "AppID must be positive.");
+
+        var rconPort = Rcon?.Port ?? 0;
+
+        if (IsRemote)
+        {
+            // Remote servers only need a valid RCON port to connect.
+            if (rconPort is < 1 or > 65535) return (false, "RCON port must be between 1 and 65535.");
+            return (true, "");
+        }
+
+        // Local servers
+        if (AppId < 0) return (false, "AppID must not be negative.");
         if (string.IsNullOrWhiteSpace(Dir)) return (false, "Server directory is required.");
         if (string.IsNullOrWhiteSpace(Executable)) return (false, "Executable is required.");
-        if (Rcon.Port is < 1 or > 65535) return (false, "RCON port must be between 1 and 65535.");
+        if (rconPort is < 1 or > 65535) return (false, "RCON port must be between 1 and 65535.");
         return (true, "");
     }
 }

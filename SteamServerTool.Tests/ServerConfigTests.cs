@@ -44,13 +44,13 @@ public class ServerConfigTests
     }
 
     [Fact]
-    public void Validate_ZeroAppId_ReturnsInvalid()
+    public void Validate_ZeroAppId_ReturnsValid()
     {
+        // AppId=0 is valid for non-SteamCMD servers (e.g. Minecraft Java)
         var cfg = ValidConfig();
         cfg.AppId = 0;
-        var (isValid, error) = cfg.Validate();
-        Assert.False(isValid);
-        Assert.Contains("AppID", error);
+        var (isValid, _) = cfg.Validate();
+        Assert.True(isValid);
     }
 
     [Fact]
@@ -61,6 +61,49 @@ public class ServerConfigTests
         var (isValid, error) = cfg.Validate();
         Assert.False(isValid);
         Assert.Contains("AppID", error);
+    }
+
+    [Fact]
+    public void Validate_MinecraftStyleConfig_ZeroAppId_ReturnsValid()
+    {
+        var cfg = new ServerConfig
+        {
+            Name       = "Minecraft Server",
+            AppId      = 0,
+            Dir        = "/servers/minecraft",
+            Executable = "java",
+            LaunchArgs = "-Xmx4G -Xms2G -jar server.jar nogui",
+            Rcon       = new() { Host = "127.0.0.1", Port = 25575, Password = "pw" }
+        };
+        var (isValid, _) = cfg.Validate();
+        Assert.True(isValid);
+    }
+
+    [Fact]
+    public void Validate_RemoteServer_NoAppIdNoDir_ReturnsValid()
+    {
+        var cfg = new ServerConfig
+        {
+            Name     = "Remote ARK",
+            IsRemote = true,
+            Rcon     = new() { Host = "192.168.1.10", Port = 27020, Password = "secret" }
+        };
+        var (isValid, _) = cfg.Validate();
+        Assert.True(isValid);
+    }
+
+    [Fact]
+    public void Validate_RemoteServer_InvalidRconPort_ReturnsInvalid()
+    {
+        var cfg = new ServerConfig
+        {
+            Name     = "Remote ARK",
+            IsRemote = true,
+            Rcon     = new() { Host = "192.168.1.10", Port = 0, Password = "secret" }
+        };
+        var (isValid, error) = cfg.Validate();
+        Assert.False(isValid);
+        Assert.Contains("RCON port", error);
     }
 
     [Fact]
@@ -145,6 +188,35 @@ public class ServerConfigTests
         Assert.NotNull(cfg.Tags);
         Assert.NotNull(cfg.ScheduledRconCommands);
         Assert.NotNull(cfg.EnvironmentVariables);
+        Assert.False(cfg.IsRemote);
+        Assert.Equal("", cfg.ServerType);
+    }
+
+    [Fact]
+    public void Validate_VintageStoryConfig_ZeroAppId_ReturnsValid()
+    {
+        var cfg = new ServerConfig
+        {
+            Name       = "Vintage Story",
+            ServerType = "Vintage Story",
+            AppId      = 0,
+            Dir        = "/servers/vintagestory",
+            Executable = "VintagestoryServer.exe",
+            LaunchArgs = "--dataPath ./data --port 42420 --maxclients 16",
+            Rcon       = new() { Host = "127.0.0.1", Port = 42425, Password = "pw" }
+        };
+        var (isValid, _) = cfg.Validate();
+        Assert.True(isValid);
+    }
+
+    [Fact]
+    public void Validate_NullRcon_ReturnsInvalid()
+    {
+        var cfg = ValidConfig();
+        cfg.Rcon = null!;   // simulate malformed JSON deserialization
+        var (isValid, error) = cfg.Validate();
+        Assert.False(isValid);
+        Assert.Contains("RCON port", error);
     }
 
     [Fact]
