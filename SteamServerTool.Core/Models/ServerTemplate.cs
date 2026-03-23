@@ -162,6 +162,20 @@ public static class ServerTemplates
         },
         new()
         {
+            Name             = "Vintage Story",
+            Icon             = "🪨",
+            Description      = "Vintage Story dedicated server (no SteamCMD — downloaded from vintagestory.at)",
+            AppId            = 0,
+            Executable       = OperatingSystem.IsWindows() ? "VintagestoryServer.exe" : "VintagestoryServer",
+            LaunchArgs       = "--dataPath ./data --port 42420 --maxclients 16",
+            DefaultDir       = "vintagestory",
+            RconPort         = 42425,
+            QueryPort        = 42420,
+            MaxPlayers       = 16,
+            RequiresSteamCmd = false,
+        },
+        new()
+        {
             Name        = "Custom Server",
             Icon        = "⚙️",
             Description = "Start with a blank configuration",

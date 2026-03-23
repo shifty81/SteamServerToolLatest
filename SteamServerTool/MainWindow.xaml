@@ -36,14 +36,16 @@
 
                 <!-- Left: action buttons -->
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnNewServer"   Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
-                    <Button x:Name="BtnRefresh"     Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
-                    <Button x:Name="BtnStartAll"    Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
+                    <Button x:Name="BtnNewServer"      Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
+                    <Button x:Name="BtnRefresh"        Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
+                    <Button x:Name="BtnStartAll"       Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
                             Style="{StaticResource AccentButton}"/>
-                    <Button x:Name="BtnStopAll"     Content="■ Stop All"    Margin="0,0,6,0" Click="BtnStopAll_Click"
+                    <Button x:Name="BtnStopAll"        Content="■ Stop All"    Margin="0,0,6,0" Click="BtnStopAll_Click"
                             Style="{StaticResource DangerButton}"/>
-                    <Button x:Name="BtnSaveConfig"  Content="💾 Save"       Margin="0,0,6,0" Click="BtnSaveConfig_Click"/>
-                    <Button x:Name="BtnToggleView"  Content="📊 Dashboard"  Margin="0,0,6,0" Click="BtnToggleView_Click"/>
+                    <Button x:Name="BtnSaveConfig"     Content="💾 Save"       Margin="0,0,6,0" Click="BtnSaveConfig_Click"/>
+                    <Button x:Name="BtnToggleView"     Content="📊 Dashboard"  Margin="0,0,6,0" Click="BtnToggleView_Click"/>
+                    <Button x:Name="BtnSetupSteamCmd"  Content="⚙ SteamCMD"   Margin="0,0,6,0" Click="BtnSetupSteamCmd_Click"
+                            ToolTip="Download or re-configure SteamCMD"/>
                 </StackPanel>
 
                 <!-- Right: status summary -->

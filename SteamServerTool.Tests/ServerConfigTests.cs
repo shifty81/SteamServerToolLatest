@@ -188,6 +188,35 @@ public class ServerConfigTests
         Assert.NotNull(cfg.Tags);
         Assert.NotNull(cfg.ScheduledRconCommands);
         Assert.NotNull(cfg.EnvironmentVariables);
+        Assert.False(cfg.IsRemote);
+        Assert.Equal("", cfg.ServerType);
+    }
+
+    [Fact]
+    public void Validate_VintageStoryConfig_ZeroAppId_ReturnsValid()
+    {
+        var cfg = new ServerConfig
+        {
+            Name       = "Vintage Story",
+            ServerType = "Vintage Story",
+            AppId      = 0,
+            Dir        = "/servers/vintagestory",
+            Executable = "VintagestoryServer.exe",
+            LaunchArgs = "--dataPath ./data --port 42420 --maxclients 16",
+            Rcon       = new() { Host = "127.0.0.1", Port = 42425, Password = "pw" }
+        };
+        var (isValid, _) = cfg.Validate();
+        Assert.True(isValid);
+    }
+
+    [Fact]
+    public void Validate_NullRcon_ReturnsInvalid()
+    {
+        var cfg = ValidConfig();
+        cfg.Rcon = null!;   // simulate malformed JSON deserialization
+        var (isValid, error) = cfg.Validate();
+        Assert.False(isValid);
+        Assert.Contains("RCON port", error);
     }
 
     [Fact]

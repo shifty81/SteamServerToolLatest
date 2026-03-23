@@ -14,12 +14,13 @@ namespace SteamServerTool;
 public partial class MainWindow : Window
 {
     // ─── Services ───────────────────────────────────────────────────────────
-    private readonly ServerManager   _serverManager    = new();
-    private readonly BackupService   _backupService    = new();
-    private readonly SteamCmdService _steamCmdService  = new();
-    private readonly WorkshopService _workshopService  = new();
-    private readonly IniFileService  _iniFileService   = new();
-    private readonly MinecraftService _minecraftService = new();
+    private readonly ServerManager      _serverManager      = new();
+    private readonly BackupService      _backupService      = new();
+    private readonly SteamCmdService    _steamCmdService    = new();
+    private readonly WorkshopService    _workshopService    = new();
+    private readonly IniFileService     _iniFileService     = new();
+    private readonly MinecraftService   _minecraftService   = new();
+    private readonly VintageStoryService _vintageStoryService = new();
 
     /// <summary>
     /// Base directory for all locally-installed servers.
@@ -181,9 +182,7 @@ public partial class MainWindow : Window
         else
         {
             BtnInstallOrDownload.Visibility = Visibility.Visible;
-            BtnInstallOrDownload.Content = IsMinecraftServer(cfg)
-                ? "⬇ Download Minecraft Server"
-                : "⬇ Install/Update via SteamCMD";
+            BtnInstallOrDownload.Content    = GetInstallButtonLabel(cfg);
         }
 
         // Mods tab
@@ -300,13 +299,14 @@ public partial class MainWindow : Window
 
     private void BtnStartAll_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var s in _serverManager.Servers)
+        // Skip remote servers — they have no local process to start.
+        foreach (var s in _serverManager.Servers.Where(s => !s.IsRemote))
             TryStartServer(s);
     }
 
     private void BtnStopAll_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var s in _serverManager.Servers)
+        foreach (var s in _serverManager.Servers.Where(s => !s.IsRemote))
             TryStopServer(s.Name);
     }
 
@@ -323,7 +323,42 @@ public partial class MainWindow : Window
         }
     }
 
-    private void BtnInstallSteamCmd_Click(object sender, RoutedEventArgs e)
+    // ─── SteamCMD setup (toolbar button — on-demand) ──────────────────────
+    private void BtnSetupSteamCmd_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new FirstRunSetupDialog(_steamCmdService) { Owner = this };
+        dlg.ShowDialog();
+        if (!string.IsNullOrEmpty(dlg.ResolvedSteamCmdPath))
+            Log($"[Setup] SteamCMD configured: {dlg.ResolvedSteamCmdPath}");
+    }
+
+    /// <summary>
+    /// Ensures SteamCMD is available, prompting the user to install it if not.
+    /// Returns true when SteamCMD is ready to use, false when the user aborted.
+    /// </summary>
+    private bool EnsureSteamCmdAvailable()
+    {
+        if (_steamCmdService.IsSteamCmdInstalled()) return true;
+
+        Log("[Setup] SteamCMD not found — opening setup …");
+        var dlg = new FirstRunSetupDialog(_steamCmdService) { Owner = this };
+        dlg.ShowDialog();
+
+        if (!string.IsNullOrEmpty(dlg.ResolvedSteamCmdPath))
+        {
+            Log($"[Setup] SteamCMD configured: {dlg.ResolvedSteamCmdPath}");
+            return true;
+        }
+
+        Log("[WARN] SteamCMD not configured — install/update aborted.");
+        MessageBox.Show(
+            "SteamCMD is required to install/update this server.\n\n" +
+            "Use the '⚙ SteamCMD' toolbar button to configure it.",
+            "SteamCMD Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
+    }
+
+    private async void BtnInstallSteamCmd_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedConfig == null) { Log("No server selected."); return; }
 
@@ -339,24 +374,62 @@ public partial class MainWindow : Window
             }
             var mcProgress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[Minecraft] {msg}")));
             Log($"[Minecraft] Downloading server to {_selectedConfig.Dir} …");
-            _ = _minecraftService.DownloadServerAsync(_selectedConfig.Dir, mcProgress);
+            var ok = await _minecraftService.DownloadServerAsync(_selectedConfig.Dir, mcProgress);
+            if (!ok) Log("[ERROR] Minecraft download failed — see log above.");
             return;
         }
 
-        // All other local servers — use SteamCMD
+        // Vintage Story — download via Anego Studios CDN, no SteamCMD needed
+        if (IsVintageStoryServer(_selectedConfig))
+        {
+            if (string.IsNullOrWhiteSpace(_selectedConfig.Dir))
+            {
+                Log("[WARN] Set the server directory on the Config tab before downloading.");
+                MessageBox.Show("Set the server directory on the Config tab before downloading.",
+                    "Directory Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var vsProgress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[VintageStory] {msg}")));
+            Log($"[VintageStory] Downloading server to {_selectedConfig.Dir} …");
+            var ok = await _vintageStoryService.DownloadServerAsync(_selectedConfig.Dir, vsProgress);
+            if (!ok) Log("[ERROR] Vintage Story download failed — see log above.");
+            return;
+        }
+
+        // All other local servers — ensure SteamCMD is installed, then deploy
+        if (!EnsureSteamCmdAvailable()) return;
+
         var notification = new SteamCmdNotificationDialog { Owner = this };
         if (notification.ShowDialog() != true) return;
 
         var progress = new Progress<string>(msg => Dispatcher.InvokeAsync(() => Log($"[SteamCMD] {msg}")));
         Log($"[SteamCMD] Starting install/update for {_selectedConfig.Name}...");
-        _ = _steamCmdService.InstallOrUpdateServer(_selectedConfig, progress);
+        var success = await _steamCmdService.InstallOrUpdateServer(_selectedConfig, progress);
+        if (!success) Log("[ERROR] SteamCMD install/update failed — see log above.");
     }
 
     /// <summary>Returns true when the config represents a Minecraft Java server (no SteamCMD).</summary>
     private static bool IsMinecraftServer(ServerConfig cfg)
-        => cfg.AppId == 0 &&
-           cfg.Executable.Equals("java", StringComparison.OrdinalIgnoreCase) &&
-           cfg.LaunchArgs.Contains("server.jar", StringComparison.OrdinalIgnoreCase);
+        => cfg.ServerType == "Minecraft Java" ||
+           (string.IsNullOrEmpty(cfg.ServerType) &&
+            cfg.AppId == 0 &&
+            cfg.Executable.Equals("java", StringComparison.OrdinalIgnoreCase) &&
+            cfg.LaunchArgs.Contains("server.jar", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns true when the config represents a Vintage Story server (no SteamCMD).</summary>
+    private static bool IsVintageStoryServer(ServerConfig cfg)
+        => cfg.ServerType == "Vintage Story" ||
+           (string.IsNullOrEmpty(cfg.ServerType) &&
+            cfg.AppId == 0 &&
+            cfg.Executable.Contains("VintagestoryServer", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns the correct label for the install/download button based on server type.</summary>
+    private static string GetInstallButtonLabel(ServerConfig cfg)
+    {
+        if (IsMinecraftServer(cfg))   return "⬇ Download Minecraft Server";
+        if (IsVintageStoryServer(cfg)) return "⬇ Download Vintage Story Server";
+        return "⬇ Install/Update via SteamCMD";
+    }
 
     // ─── Dashboard toggle ─────────────────────────────────────────────────
     private void BtnToggleView_Click(object sender, RoutedEventArgs e)
@@ -532,9 +605,10 @@ public partial class MainWindow : Window
         var memMb      = isRunning ? _serverManager.GetMemoryMb(cfg.Name) : 0;
         var cpuPct     = isRunning ? _serverManager.GetCpuPercent(cfg.Name) : 0;
 
-        // Find template icon
-        var template  = ServerTemplates.All.FirstOrDefault(t =>
-            t.AppId == cfg.AppId && t.AppId != 0);
+        // Find template icon — fall back to name-match for AppId=0 templates
+        var template = ServerTemplates.All.FirstOrDefault(t =>
+            (t.AppId != 0 && t.AppId == cfg.AppId) ||
+            (!string.IsNullOrEmpty(cfg.ServerType) && t.Name == cfg.ServerType));
         var icon = template?.Icon ?? "🖥️";
 
         // ── Status dot ──
@@ -711,6 +785,13 @@ public partial class MainWindow : Window
             CfgMaxPlayers.Text   = tmpl.MaxPlayers.ToString();
             if (!string.IsNullOrEmpty(tmpl.Group))
                 CfgGroup.Text    = tmpl.Group;
+
+            // Stamp server type so the install button routes correctly (non-SteamCMD templates).
+            if (!tmpl.RequiresSteamCmd)
+                _selectedConfig.ServerType = tmpl.Name;
+
+            // Update install/download button label immediately.
+            BtnInstallOrDownload.Content = GetInstallButtonLabel(_selectedConfig);
 
             Log($"Template '{tmpl.Name}' applied — review fields and click 'Apply Config Changes'.");
         }
