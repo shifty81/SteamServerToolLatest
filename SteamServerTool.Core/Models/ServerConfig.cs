@@ -117,6 +117,27 @@ public class ServerConfig
     [JsonPropertyName("serverType")]
     public string ServerType { get; set; } = "";
 
+    /// <summary>
+    /// Optional subdirectory (relative to <see cref="Dir"/>) that the Config File editor
+    /// should scan instead of the full server installation directory.
+    /// Useful for servers like Vintage Story whose install tree contains thousands of
+    /// game-asset JSON files that are not administrator-editable config files.
+    /// Leave empty to scan the entire <see cref="Dir"/> tree (default behaviour).
+    /// </summary>
+    [JsonPropertyName("configDir")]
+    public string ConfigDir { get; set; } = "";
+
+    /// <summary>
+    /// Console command sent to the server's standard input to request a graceful save-and-stop.
+    /// When non-empty, <see cref="SteamServerTool.Core.Services.ServerManager"/> will redirect
+    /// stdin for the process and write this command before waiting for it to exit cleanly.
+    /// Example: "/stop" for Vintage Story, "stop" for Minecraft.
+    /// Leave empty to rely on the default <see cref="System.Diagnostics.Process.CloseMainWindow"/>
+    /// mechanism (suitable for most windowed / Source-engine servers).
+    /// </summary>
+    [JsonPropertyName("stdinStopCommand")]
+    public string StdinStopCommand { get; set; } = "";
+
     public (bool IsValid, string Error) Validate()
     {
         if (string.IsNullOrWhiteSpace(Name)) return (false, "Name is required.");

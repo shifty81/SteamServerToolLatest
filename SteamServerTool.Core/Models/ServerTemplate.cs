@@ -22,6 +22,18 @@ public class ServerTemplate
     /// When false the server is not installed/updated via SteamCMD (e.g. Minecraft Java).
     /// </summary>
     public bool   RequiresSteamCmd { get; set; } = true;
+
+    /// <summary>
+    /// Optional subdirectory (relative to the install directory) that the Config File
+    /// editor should scan.  Empty means scan the whole install directory.
+    /// </summary>
+    public string ConfigDir        { get; set; } = "";
+
+    /// <summary>
+    /// Console command to send via stdin for a graceful save-and-stop sequence.
+    /// Empty means fall back to the default CloseMainWindow() behaviour.
+    /// </summary>
+    public string StdinStopCommand { get; set; } = "";
 }
 
 /// <summary>Built-in server template library.</summary>
@@ -120,6 +132,7 @@ public static class ServerTemplates
             QueryPort        = 25565,
             MaxPlayers       = 20,
             RequiresSteamCmd = false,
+            StdinStopCommand = "stop",
         },
         new()
         {
@@ -173,6 +186,8 @@ public static class ServerTemplates
             QueryPort        = 42420,
             MaxPlayers       = 16,
             RequiresSteamCmd = false,
+            ConfigDir        = "data",
+            StdinStopCommand = "/stop",
         },
         new()
         {
