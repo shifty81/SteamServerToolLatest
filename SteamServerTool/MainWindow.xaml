@@ -1,0 +1,636 @@
+<Window x:Class="SteamServerTool.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Steam Server Tool"
+        Height="900" Width="1400"
+        MinHeight="600" MinWidth="900"
+        Background="{StaticResource DarkBgBrush}"
+        Foreground="{StaticResource ForegroundBrush}"
+        FontFamily="Segoe UI" FontSize="13"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48"/>   <!-- Toolbar -->
+            <RowDefinition Height="*"/>    <!-- Main content -->
+            <RowDefinition Height="5"/>    <!-- Splitter -->
+            <RowDefinition Height="140"/>  <!-- Operation log -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════════════════════════
+             ROW 0 — TOP TOOLBAR
+             ═══════════════════════════════════════ -->
+        <Border Grid.Row="0"
+                Background="{StaticResource PanelBgBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,0">
+            <DockPanel VerticalAlignment="Center">
+                <!-- Left: brand -->
+                <TextBlock DockPanel.Dock="Left"
+                           Text="⚙ Steam Server Tool"
+                           FontSize="15" FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,20,0"/>
+
+                <!-- Left: action buttons -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="BtnNewServer"   Content="＋ New Server"  Margin="0,0,6,0" Click="BtnNewServer_Click"/>
+                    <Button x:Name="BtnRefresh"     Content="↻ Refresh"     Margin="0,0,6,0" Click="BtnRefresh_Click"/>
+                    <Button x:Name="BtnStartAll"    Content="▶ Start All"   Margin="0,0,6,0" Click="BtnStartAll_Click"
+                            Style="{StaticResource AccentButton}"/>
+                    <Button x:Name="BtnStopAll"     Content="■ Stop All"    Margin="0,0,6,0" Click="BtnStopAll_Click"
+                            Style="{StaticResource DangerButton}"/>
+                    <Button x:Name="BtnSaveConfig"  Content="💾 Save"       Margin="0,0,6,0" Click="BtnSaveConfig_Click"/>
+                    <Button x:Name="BtnInstallSteamCmd" Content="⬇ Install/Update via SteamCMD"
+                            Margin="0,0,6,0" Click="BtnInstallSteamCmd_Click"/>
+                </StackPanel>
+
+                <!-- Right: status summary -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse x:Name="SummaryDot" Width="10" Height="10"
+                             Fill="{StaticResource StatusStoppedBrush}"
+                             VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="TxtStatusSummary"
+                               Text="0 servers online"
+                               Foreground="{StaticResource DimForegroundBrush}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════
+             ROW 1 — MAIN CONTENT  (3 columns)
+             ═══════════════════════════════════════ -->
+        <Grid Grid.Row="1" Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230" MinWidth="180"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ─── LEFT COLUMN: Server Sidebar ─── -->
+            <Border Grid.Column="0"
+                    Background="{StaticResource PanelBgBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8"
+                    ClipToBounds="True">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="3" BlurRadius="8" Opacity="0.35"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="{StaticResource ControlBgBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                            Padding="10,8">
+                        <TextBlock Text="SERVERS" FontWeight="SemiBold" FontSize="11"
+                                   Foreground="{StaticResource DimForegroundBrush}"
+                                   />
+                    </Border>
+
+                    <!-- Search box -->
+                    <TextBox Grid.Row="1" x:Name="TxtSearch"
+                             Margin="6,6,6,4"
+                             Tag="Search servers..."
+                             TextChanged="TxtSearch_TextChanged"/>
+
+                    <!-- Server list -->
+                    <ListBox Grid.Row="2" x:Name="LbServers"
+                             Margin="6,2,6,2"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             SelectionChanged="LbServers_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="14"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse Grid.Column="0"
+                                             Width="9" Height="9"
+                                             Fill="{Binding StatusBrush}"
+                                             VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Group}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource DimForegroundBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Add/Remove buttons -->
+                    <Grid Grid.Row="3" Margin="6,4,6,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="＋ Add"    Click="BtnAddServer_Click"/>
+                        <Button Grid.Column="2" Content="✕ Remove"  Click="BtnRemoveServer_Click"
+                                Style="{StaticResource DangerButton}"/>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- ─── COLUMN 1: Splitter ─── -->
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"/>
+
+            <!-- ─── RIGHT COLUMN: Detail Panel ─── -->
+            <Border Grid.Column="2"
+                    Background="{StaticResource PanelBgBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8"
+                    ClipToBounds="True">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="3" BlurRadius="8" Opacity="0.35"/>
+                </Border.Effect>
+
+                <!-- No-selection placeholder -->
+                <Grid x:Name="PnlNoSelection">
+                    <TextBlock Text="Select a server from the list"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{StaticResource DimForegroundBrush}"
+                               FontSize="16"/>
+                </Grid>
+            </Border>
+
+            <!-- Detail overlay (shown when a server is selected) -->
+            <Border Grid.Column="2"
+                    x:Name="PnlDetail"
+                    Background="{StaticResource PanelBgBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8"
+                    ClipToBounds="True"
+                    Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="3" BlurRadius="8" Opacity="0.35"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Server header bar -->
+                    <Border Grid.Row="0"
+                            Background="{StaticResource ControlBgBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            Padding="12,10">
+                        <DockPanel>
+                            <Ellipse x:Name="DetailStatusDot"
+                                     Width="12" Height="12"
+                                     Fill="{StaticResource StatusStoppedBrush}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,10,0"
+                                     DockPanel.Dock="Left"/>
+                            <TextBlock x:Name="TxtDetailTitle"
+                                       Text="Server Name"
+                                       FontSize="16" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       DockPanel.Dock="Left"/>
+                            <TextBlock x:Name="TxtDetailStatus"
+                                       Text="Stopped"
+                                       Foreground="{StaticResource DimForegroundBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="12,0,0,0"
+                                       DockPanel.Dock="Left"/>
+
+                            <!-- Control buttons -->
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button x:Name="BtnStart"   Content="▶ Start"
+                                        Style="{StaticResource AccentButton}"
+                                        Margin="0,0,6,0" Click="BtnStart_Click"/>
+                                <Button x:Name="BtnStop"    Content="■ Stop"
+                                        Style="{StaticResource DangerButton}"
+                                        Margin="0,0,6,0" Click="BtnStop_Click"/>
+                                <Button x:Name="BtnRestart" Content="↺ Restart"
+                                        Margin="0,0,0,0" Click="BtnRestart_Click"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Tab control -->
+                    <TabControl Grid.Row="1" x:Name="ServerTabs"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="8">
+
+                        <!-- ── TAB: Overview ── -->
+                        <TabItem Header="Overview">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <Grid Margin="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Stats card -->
+                                    <Border Grid.Column="0"
+                                            Background="{StaticResource ControlBgBrush}"
+                                            BorderBrush="{StaticResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="6"
+                                            Padding="14">
+                                        <StackPanel>
+                                            <TextBlock Text="SERVER INFO" FontWeight="SemiBold" FontSize="11"
+                                                       Foreground="{StaticResource DimForegroundBrush}"
+                                                       Margin="0,0,0,10"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Status:"       Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtOvStatus" Text="Stopped" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Uptime:"       Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtOvUptime" Text="—"/>
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="App ID:"       Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtOvAppId"  Text="—"/>
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Group:"        Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="TxtOvGroup"  Text="—"/>
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Max Players:"  Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="TxtOvMaxPlayers" Text="—"/>
+                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Total Crashes:" Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="TxtOvCrashes" Text="0"/>
+                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Last Crash:"   Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="6" Grid.Column="1" x:Name="TxtOvLastCrash" Text="—" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Total Uptime:" Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="7" Grid.Column="1" x:Name="TxtOvTotalUptime" Text="—"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Notes card -->
+                                    <Border Grid.Column="2"
+                                            Background="{StaticResource ControlBgBrush}"
+                                            BorderBrush="{StaticResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="6"
+                                            Padding="14">
+                                        <StackPanel>
+                                            <TextBlock Text="NOTES" FontWeight="SemiBold" FontSize="11"
+                                                       Foreground="{StaticResource DimForegroundBrush}"
+                                                       Margin="0,0,0,10"/>
+                                            <TextBox x:Name="TxtOvNotes"
+                                                     AcceptsReturn="True"
+                                                     TextWrapping="Wrap"
+                                                     Height="180"
+                                                     VerticalScrollBarVisibility="Auto"/>
+                                            <Button Content="Save Notes" Margin="0,8,0,0"
+                                                    HorizontalAlignment="Left"
+                                                    Click="BtnSaveNotes_Click"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <!-- ── TAB: Config ── -->
+                        <TabItem Header="Config">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="12" MaxWidth="700">
+                                    <TextBlock Text="SERVER CONFIGURATION" FontWeight="SemiBold" FontSize="11"
+                                               Foreground="{StaticResource DimForegroundBrush}"
+                                               Margin="0,0,0,12"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="60"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Label Grid.Row="0"  Grid.Column="0" Content="Name:"              VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="CfgName"            Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="1"  Grid.Column="0" Content="App ID:"            VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="CfgAppId"           Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="2"  Grid.Column="0" Content="Directory:"         VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="CfgDir"             Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="3"  Grid.Column="0" Content="Executable:"        VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="CfgExecutable"      Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="4"  Grid.Column="0" Content="Launch Args:"       VerticalAlignment="Top" Margin="0,6,0,0"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="CfgLaunchArgs"
+                                                 Margin="0,2" AcceptsReturn="True"
+                                                 TextWrapping="Wrap" Height="56"/>
+
+                                        <Label Grid.Row="5"  Grid.Column="0" Content="RCON Host:"         VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="CfgRconHost"        Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="6"  Grid.Column="0" Content="RCON Port:"         VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="6" Grid.Column="1" x:Name="CfgRconPort"        Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="7"  Grid.Column="0" Content="RCON Password:"     VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="7" Grid.Column="1" x:Name="CfgRconPassword"    Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="8"  Grid.Column="0" Content="Backup Folder:"     VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="8" Grid.Column="1" x:Name="CfgBackupFolder"    Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="9"  Grid.Column="0" Content="Keep Backups:"      VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="9" Grid.Column="1" x:Name="CfgKeepBackups"     Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="10" Grid.Column="0" Content="Backup Interval:"   VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="10" Grid.Column="1" x:Name="CfgBackupInterval" Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="11" Grid.Column="0" Content="Restart Interval:"  VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="11" Grid.Column="1" x:Name="CfgRestartInterval" Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="12" Grid.Column="0" Content="Max Players:"       VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="12" Grid.Column="1" x:Name="CfgMaxPlayers"     Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="13" Grid.Column="0" Content="Group:"             VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="13" Grid.Column="1" x:Name="CfgGroup"          Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="14" Grid.Column="0" Content="Discord Webhook:"   VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="14" Grid.Column="1" x:Name="CfgDiscordWebhook" Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="15" Grid.Column="0" Content="Shutdown (secs):"   VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="15" Grid.Column="1" x:Name="CfgShutdownSecs"   Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="16" Grid.Column="0" Content="Query Port:"        VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="16" Grid.Column="1" x:Name="CfgQueryPort"      Margin="0,2" VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <CheckBox x:Name="CfgAutoUpdate"        Content="Auto Update"            Margin="0,0,16,0"/>
+                                        <CheckBox x:Name="CfgAutoStart"         Content="Auto Start on Launch"   Margin="0,0,16,0"/>
+                                        <CheckBox x:Name="CfgFavorite"          Content="Favorite"               Margin="0,0,16,0"/>
+                                        <CheckBox x:Name="CfgBackupBeforeRestart" Content="Backup Before Restart"/>
+                                    </StackPanel>
+
+                                    <Button Content="💾 Apply Config Changes"
+                                            Margin="0,14,0,0" HorizontalAlignment="Left"
+                                            Style="{StaticResource AccentButton}"
+                                            Click="BtnApplyConfig_Click"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <!-- ── TAB: Mods ── -->
+                        <TabItem Header="Mods">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="WORKSHOP MODS" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <ListBox Grid.Row="1" x:Name="LbMods">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding StatusLabel}"
+                                                           Foreground="{Binding StatusColor}"
+                                                           Margin="0,0,8,0" Width="60"/>
+                                                <TextBlock Text="{Binding ModId}" FontFamily="Consolas"/>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Grid Grid.Row="2" Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" x:Name="TxtModId" Tag="Mod ID (Workshop)"/>
+                                    <Button  Grid.Column="2" Content="＋ Add"     Click="BtnAddMod_Click"/>
+                                    <Button  Grid.Column="4" Content="✕ Remove"   Click="BtnRemoveMod_Click"
+                                             Style="{StaticResource DangerButton}"/>
+                                    <Button  Grid.Column="6" Content="⊘ Disable"  Click="BtnDisableMod_Click"/>
+                                    <Button  Grid.Column="8" Content="⬇ Update"   Click="BtnUpdateMod_Click"
+                                             Style="{StaticResource AccentButton}"/>
+                                </Grid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ── TAB: Backups ── -->
+                        <TabItem Header="Backups">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="BACKUP FILES" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <ListBox Grid.Row="1" x:Name="LbBackups">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="80"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding TimestampStr}"
+                                                           Foreground="{StaticResource DimForegroundBrush}"
+                                                           HorizontalAlignment="Right" Margin="8,0"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding SizeStr}"
+                                                           Foreground="{StaticResource DimForegroundBrush}"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Content="＋ Create Backup"    Click="BtnCreateBackup_Click"
+                                            Style="{StaticResource AccentButton}" Margin="0,0,6,0"/>
+                                    <Button Content="↩ Restore"           Click="BtnRestoreBackup_Click"
+                                            Margin="0,0,6,0"/>
+                                    <Button Content="✕ Delete"            Click="BtnDeleteBackup_Click"
+                                            Style="{StaticResource DangerButton}" Margin="0,0,6,0"/>
+                                    <Button Content="↻ Refresh"           Click="BtnRefreshBackups_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ── TAB: Console ── -->
+                        <TabItem Header="Console">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                    <TextBlock DockPanel.Dock="Left" Text="RCON CONSOLE" FontWeight="SemiBold" FontSize="11"
+                                               Foreground="{StaticResource DimForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button x:Name="BtnRconConnect"    Content="Connect"    Margin="0,0,6,0"
+                                                Style="{StaticResource AccentButton}" Click="BtnRconConnect_Click"/>
+                                        <Button x:Name="BtnRconDisconnect" Content="Disconnect" Click="BtnRconDisconnect_Click"
+                                                Style="{StaticResource DangerButton}"/>
+                                    </StackPanel>
+                                </DockPanel>
+
+                                <TextBox Grid.Row="1" x:Name="TxtConsoleOutput"
+                                         IsReadOnly="True"
+                                         TextWrapping="Wrap"
+                                         AcceptsReturn="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas" FontSize="12"
+                                         Background="#1A1A1A"
+                                         Foreground="#C8F08F"/>
+
+                                <Grid Grid.Row="2" Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="80"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" x:Name="TxtConsoleInput"
+                                             Tag="Enter RCON command..."
+                                             KeyDown="TxtConsoleInput_KeyDown"/>
+                                    <Button  Grid.Column="2" Content="Send"
+                                             Style="{StaticResource AccentButton}"
+                                             Click="BtnSendRcon_Click"/>
+                                </Grid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ── TAB: Logs ── -->
+                        <TabItem Header="Logs">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                    <TextBlock DockPanel.Dock="Left" Text="SERVER LOGS" FontWeight="SemiBold" FontSize="11"
+                                               Foreground="{StaticResource DimForegroundBrush}" VerticalAlignment="Center"/>
+                                    <Button DockPanel.Dock="Right" Content="↻ Refresh Logs"
+                                            Click="BtnRefreshLogs_Click"/>
+                                </DockPanel>
+
+                                <TextBox Grid.Row="1" x:Name="TxtLogViewer"
+                                         IsReadOnly="True"
+                                         TextWrapping="NoWrap"
+                                         AcceptsReturn="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas" FontSize="11"
+                                         Background="#1A1A1A"
+                                         Foreground="#D4D4D4"/>
+
+                                <TextBlock Grid.Row="2" x:Name="TxtLogPath"
+                                           Margin="0,4,0,0"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           FontSize="11" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                        </TabItem>
+
+                    </TabControl>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════
+             ROW 2 — HORIZONTAL SPLITTER
+             ═══════════════════════════════════════ -->
+        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"/>
+
+        <!-- ═══════════════════════════════════════
+             ROW 3 — OPERATION LOG
+             ═══════════════════════════════════════ -->
+        <Border Grid.Row="3"
+                Background="{StaticResource PanelBgBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Margin="8,0,8,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <DockPanel Grid.Row="0" Margin="8,4,8,2">
+                    <TextBlock Text="OPERATION LOG" FontWeight="SemiBold" FontSize="11"
+                               Foreground="{StaticResource DimForegroundBrush}"
+                               VerticalAlignment="Center"/>
+                    <Button DockPanel.Dock="Right" Content="Clear"
+                            Padding="8,2" FontSize="11"
+                            Click="BtnClearLog_Click"/>
+                </DockPanel>
+                <TextBox Grid.Row="1" x:Name="TxtOpLog"
+                         IsReadOnly="True"
+                         TextWrapping="NoWrap"
+                         AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="11"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Margin="8,0,8,4"/>
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SteamServerTool.Core/SteamServerTool.Core.csproj" />
+  <Project Path="SteamServerTool.Tests/SteamServerTool.Tests.csproj" />
+  <Project Path="SteamServerTool/SteamServerTool.csproj" />
+</Solution>
