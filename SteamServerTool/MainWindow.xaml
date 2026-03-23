@@ -219,7 +219,10 @@
                                         Style="{StaticResource DangerButton}"
                                         Margin="0,0,6,0" Click="BtnStop_Click"/>
                                 <Button x:Name="BtnRestart" Content="↺ Restart"
-                                        Margin="0,0,0,0" Click="BtnRestart_Click"/>
+                                        Margin="0,0,6,0" Click="BtnRestart_Click"/>
+                                <Button x:Name="BtnForceKill" Content="⚡ Force Kill"
+                                        Style="{StaticResource DangerButton}"
+                                        Margin="0,0,0,0" Click="BtnForceKill_Click"/>
                             </StackPanel>
                         </DockPanel>
                     </Border>
@@ -264,6 +267,8 @@
                                                     <RowDefinition Height="28"/>
                                                     <RowDefinition Height="28"/>
                                                     <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
+                                                    <RowDefinition Height="28"/>
                                                 </Grid.RowDefinitions>
                                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Status:"       Foreground="{StaticResource DimForegroundBrush}"/>
                                                 <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtOvStatus" Text="Stopped" FontWeight="SemiBold"/>
@@ -275,12 +280,16 @@
                                                 <TextBlock Grid.Row="3" Grid.Column="1" x:Name="TxtOvGroup"  Text="—"/>
                                                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Max Players:"  Foreground="{StaticResource DimForegroundBrush}"/>
                                                 <TextBlock Grid.Row="4" Grid.Column="1" x:Name="TxtOvMaxPlayers" Text="—"/>
-                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Total Crashes:" Foreground="{StaticResource DimForegroundBrush}"/>
-                                                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="TxtOvCrashes" Text="0"/>
-                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Last Crash:"   Foreground="{StaticResource DimForegroundBrush}"/>
-                                                <TextBlock Grid.Row="6" Grid.Column="1" x:Name="TxtOvLastCrash" Text="—" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Total Uptime:" Foreground="{StaticResource DimForegroundBrush}"/>
-                                                <TextBlock Grid.Row="7" Grid.Column="1" x:Name="TxtOvTotalUptime" Text="—"/>
+                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Query Port:"   Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="TxtOvQueryPort" Text="—"/>
+                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Total Crashes:" Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="6" Grid.Column="1" x:Name="TxtOvCrashes" Text="0"/>
+                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Last Crash:"   Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="7" Grid.Column="1" x:Name="TxtOvLastCrash" Text="—" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Row="8" Grid.Column="0" Text="Total Uptime:" Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="8" Grid.Column="1" x:Name="TxtOvTotalUptime" Text="—"/>
+                                                <TextBlock Grid.Row="9" Grid.Column="0" Text="Tags:"         Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Grid.Row="9" Grid.Column="1" x:Name="TxtOvTags"   Text="—" TextTrimming="CharacterEllipsis"/>
                                             </Grid>
                                         </StackPanel>
                                     </Border>
@@ -319,7 +328,7 @@
 
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="190"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
@@ -328,6 +337,11 @@
                                             <RowDefinition Height="36"/>
                                             <RowDefinition Height="36"/>
                                             <RowDefinition Height="60"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="36"/>
                                             <RowDefinition Height="36"/>
                                             <RowDefinition Height="36"/>
                                             <RowDefinition Height="36"/>
@@ -395,6 +409,23 @@
 
                                         <Label Grid.Row="16" Grid.Column="0" Content="Query Port:"        VerticalAlignment="Center"/>
                                         <TextBox Grid.Row="16" Grid.Column="1" x:Name="CfgQueryPort"      Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="17" Grid.Column="0" Content="Tags:"              VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="17" Grid.Column="1" x:Name="CfgTags"           Margin="0,2" VerticalAlignment="Center"
+                                                 Tag="Comma-separated tags (e.g. production,ark)"/>
+
+                                        <Label Grid.Row="18" Grid.Column="0" Content="Warn Before Restart (min):" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="18" Grid.Column="1" x:Name="CfgRestartWarnMins" Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="19" Grid.Column="0" Content="Warn Message:"      VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="19" Grid.Column="1" x:Name="CfgRestartWarnMsg"  Margin="0,2" VerticalAlignment="Center"
+                                                 Tag="e.g. Server restarting in {minutes} minutes!"/>
+
+                                        <Label Grid.Row="20" Grid.Column="0" Content="CPU Alert (%):"     VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="20" Grid.Column="1" x:Name="CfgCpuAlert"       Margin="0,2" VerticalAlignment="Center"/>
+
+                                        <Label Grid.Row="21" Grid.Column="0" Content="Mem Alert (MB):"    VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="21" Grid.Column="1" x:Name="CfgMemAlert"       Margin="0,2" VerticalAlignment="Center"/>
                                     </Grid>
 
                                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -449,6 +480,8 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox Grid.Column="0" x:Name="TxtModId" Tag="Mod ID (Workshop)"/>
                                     <Button  Grid.Column="2" Content="＋ Add"     Click="BtnAddMod_Click"/>
@@ -457,7 +490,106 @@
                                     <Button  Grid.Column="6" Content="⊘ Disable"  Click="BtnDisableMod_Click"/>
                                     <Button  Grid.Column="8" Content="⬇ Update"   Click="BtnUpdateMod_Click"
                                              Style="{StaticResource AccentButton}"/>
+                                    <Button  Grid.Column="10" Content="🔍 Browse Workshop"
+                                             Style="{StaticResource AccentButton}"
+                                             Click="BtnBrowseWorkshop_Click"/>
                                 </Grid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ── TAB: Scheduled Commands ── -->
+                        <TabItem Header="Scheduled">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="SCHEDULED RCON COMMANDS" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <ListBox Grid.Row="1" x:Name="LbScheduled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding IntervalLabel}"
+                                                           Foreground="{StaticResource DimForegroundBrush}"
+                                                           Margin="8,0,0,0" Width="80" TextAlignment="Right"/>
+                                                <TextBlock Text="{Binding Command}" FontFamily="Consolas"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Grid Grid.Row="2" Margin="0,8,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="110"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" x:Name="TxtSchedCommand"  Tag="RCON command..."/>
+                                    <TextBox Grid.Column="2" x:Name="TxtSchedInterval" Tag="Interval (min)"/>
+                                </Grid>
+
+                                <StackPanel Grid.Row="3" Orientation="Horizontal">
+                                    <Button Content="＋ Add"    Click="BtnAddScheduled_Click"
+                                            Style="{StaticResource AccentButton}" Margin="0,0,6,0"/>
+                                    <Button Content="✕ Remove" Click="BtnRemoveScheduled_Click"
+                                            Style="{StaticResource DangerButton}"/>
+                                </StackPanel>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ── TAB: Env Vars ── -->
+                        <TabItem Header="Env Vars">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="ENVIRONMENT VARIABLES" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource DimForegroundBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <ListBox Grid.Row="1" x:Name="LbEnvVars">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Key}"
+                                                           FontFamily="Consolas" FontWeight="SemiBold"
+                                                           Width="160" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text=" = " Foreground="{StaticResource DimForegroundBrush}"/>
+                                                <TextBlock Text="{Binding Value}" FontFamily="Consolas"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Grid Grid.Row="2" Margin="0,8,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" x:Name="TxtEnvKey"   Tag="Variable name"/>
+                                    <TextBox Grid.Column="2" x:Name="TxtEnvValue" Tag="Value"/>
+                                </Grid>
+
+                                <StackPanel Grid.Row="3" Orientation="Horizontal">
+                                    <Button Content="＋ Add / Update" Click="BtnAddEnvVar_Click"
+                                            Style="{StaticResource AccentButton}" Margin="0,0,6,0"/>
+                                    <Button Content="✕ Remove"        Click="BtnRemoveEnvVar_Click"
+                                            Style="{StaticResource DangerButton}"/>
+                                </StackPanel>
                             </Grid>
                         </TabItem>
 
