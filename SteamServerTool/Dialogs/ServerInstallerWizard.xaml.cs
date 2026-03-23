@@ -466,22 +466,24 @@ public partial class ServerInstallerWizard : Window
     // ─── Banner color helper ──────────────────────────────────────────────
     private enum BannerState { Idle, InProgress, Success, Failure }
 
+    // Shared accent colors that drive both the banner border and the icon foreground.
+    private static readonly Color ColorSuccess    = Color.FromRgb(0x4E, 0xC9, 0x4E);
+    private static readonly Color ColorFailure    = Color.FromRgb(0xE0, 0x52, 0x52);
+    private static readonly Color ColorInProgress = Color.FromRgb(0x00, 0x7A, 0xCC);
+    private static readonly Color ColorIdle       = Color.FromRgb(0xAA, 0xAA, 0xAA);
+
     private void SetDeployBannerColor(BannerState state)
     {
-        (Color bg, Color border) = state switch
+        (Color bg, Color accent) = state switch
         {
-            BannerState.Success    => (Color.FromRgb(0x1A, 0x3A, 0x1A), Color.FromRgb(0x4E, 0xC9, 0x4E)),
-            BannerState.Failure    => (Color.FromRgb(0x3A, 0x1A, 0x1A), Color.FromRgb(0xE0, 0x52, 0x52)),
-            BannerState.InProgress => (Color.FromRgb(0x1A, 0x2A, 0x3A), Color.FromRgb(0x00, 0x7A, 0xCC)),
-            _                      => (Color.FromRgb(0x2A, 0x2A, 0x2A), Color.FromRgb(0x3F, 0x3F, 0x46))
+            BannerState.Success    => (Color.FromRgb(0x1A, 0x3A, 0x1A), ColorSuccess),
+            BannerState.Failure    => (Color.FromRgb(0x3A, 0x1A, 0x1A), ColorFailure),
+            BannerState.InProgress => (Color.FromRgb(0x1A, 0x2A, 0x3A), ColorInProgress),
+            _                      => (Color.FromRgb(0x2A, 0x2A, 0x2A), ColorIdle)
         };
 
-        DeployBanner.Background   = new SolidColorBrush(bg);
-        DeployBanner.BorderBrush  = new SolidColorBrush(border);
-        DeployBannerIcon.Foreground = new SolidColorBrush(
-            state == BannerState.Success    ? Color.FromRgb(0x4E, 0xC9, 0x4E) :
-            state == BannerState.Failure    ? Color.FromRgb(0xE0, 0x52, 0x52) :
-            state == BannerState.InProgress ? Color.FromRgb(0x00, 0x7A, 0xCC) :
-                                              Color.FromRgb(0xAA, 0xAA, 0xAA));
+        DeployBanner.Background         = new SolidColorBrush(bg);
+        DeployBanner.BorderBrush        = new SolidColorBrush(accent);
+        DeployBannerIcon.Foreground     = new SolidColorBrush(accent);
     }
 }
