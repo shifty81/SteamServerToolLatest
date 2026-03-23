@@ -63,3 +63,8 @@ nCrunchTemp_*
 Thumbs.db
 desktop.ini
 /SteamCmd
+
+# Runtime data directories created next to the executable
+Servers/
+Backups/
+SteamCmd/

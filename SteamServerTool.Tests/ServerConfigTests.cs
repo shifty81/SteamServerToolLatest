@@ -190,6 +190,49 @@ public class ServerConfigTests
         Assert.NotNull(cfg.EnvironmentVariables);
         Assert.False(cfg.IsRemote);
         Assert.Equal("", cfg.ServerType);
+        Assert.Equal("", cfg.StdinStopCommand);
+        Assert.Equal("", cfg.ConfigDir);
+    }
+
+    [Fact]
+    public void StdinStopCommand_RoundTrips_InJson()
+    {
+        var cfg = ValidConfig();
+        cfg.StdinStopCommand = "/stop";
+
+        var json = System.Text.Json.JsonSerializer.Serialize(cfg);
+        var back = System.Text.Json.JsonSerializer.Deserialize<ServerConfig>(json)!;
+
+        Assert.Equal("/stop", back.StdinStopCommand);
+    }
+
+    [Fact]
+    public void ConfigDir_RoundTrips_InJson()
+    {
+        var cfg = ValidConfig();
+        cfg.ConfigDir = "data";
+
+        var json = System.Text.Json.JsonSerializer.Serialize(cfg);
+        var back = System.Text.Json.JsonSerializer.Deserialize<ServerConfig>(json)!;
+
+        Assert.Equal("data", back.ConfigDir);
+    }
+
+    [Fact]
+    public void VintageStoryTemplate_HasExpectedStopCommand()
+    {
+        var tmpl = ServerTemplates.All.FirstOrDefault(t => t.Name == "Vintage Story");
+        Assert.NotNull(tmpl);
+        Assert.Equal("/stop", tmpl!.StdinStopCommand);
+        Assert.Equal("data", tmpl.ConfigDir);
+    }
+
+    [Fact]
+    public void MinecraftTemplate_HasExpectedStopCommand()
+    {
+        var tmpl = ServerTemplates.All.FirstOrDefault(t => t.Name == "Minecraft Java");
+        Assert.NotNull(tmpl);
+        Assert.Equal("stop", tmpl!.StdinStopCommand);
     }
 
     [Fact]

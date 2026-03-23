@@ -28,6 +28,13 @@ public partial class MainWindow : Window
     /// </summary>
     private static readonly string ServersBaseDir =
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Servers");
+
+    /// <summary>
+    /// Base directory for all server backups.
+    /// Defaults to a "Backups" folder next to the application executable.
+    /// </summary>
+    private static readonly string BackupsBaseDir =
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");
     private RconClient? _rconClient;
 
     // ─── State ──────────────────────────────────────────────────────────────
@@ -919,6 +926,10 @@ public partial class MainWindow : Window
             if (!tmpl.RequiresSteamCmd)
                 _selectedConfig.ServerType = tmpl.Name;
 
+            // Apply graceful-stop and config-directory hints from the template.
+            _selectedConfig.StdinStopCommand = tmpl.StdinStopCommand;
+            _selectedConfig.ConfigDir        = tmpl.ConfigDir;
+
             // Update install/download button label immediately.
             BtnInstallOrDownload.Content = GetInstallButtonLabel(_selectedConfig);
 
@@ -930,7 +941,12 @@ public partial class MainWindow : Window
     private void TabConfigFiles_GotFocus(object sender, RoutedEventArgs e)
     {
         if (_selectedConfig != null)
-            LoadIniFileTabs(_selectedConfig);
+        {
+            var cfg = _selectedConfig;
+            // Defer to avoid "Cannot call StartAt when content generation is in progress"
+            // (WPF ItemContainerGenerator race condition when focus changes mid-layout).
+            Dispatcher.InvokeAsync(() => LoadIniFileTabs(cfg));
+        }
     }
 
     private void BtnRescanConfigFiles_Click(object sender, RoutedEventArgs e)
@@ -1001,9 +1017,21 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Resolve the effective scan directory: use ConfigDir (relative or absolute) if set,
+        // otherwise fall back to the full server install directory.
+        var scanDir = cfg.Dir;
+        if (!string.IsNullOrWhiteSpace(cfg.ConfigDir))
+        {
+            var resolved = Path.IsPathRooted(cfg.ConfigDir)
+                ? cfg.ConfigDir
+                : Path.GetFullPath(Path.Combine(cfg.Dir, cfg.ConfigDir));
+            if (Directory.Exists(resolved))
+                scanDir = resolved;
+        }
+
         // Discover key=value files and text files
-        var kvFiles   = _iniFileService.GetConfigFiles(cfg.Dir);
-        var textFiles = _iniFileService.GetTextFiles(cfg.Dir);
+        var kvFiles   = _iniFileService.GetConfigFiles(scanDir);
+        var textFiles = _iniFileService.GetTextFiles(scanDir);
 
         // Merge, avoiding duplicates
         _allConfigFiles = kvFiles.ToList();
@@ -1805,6 +1833,12 @@ public partial class MainWindow : Window
         TxtDetailTitle.Text = _selectedConfig.Name;
         PopulateServerList(TxtSearch.Text);
         Log($"Config applied for {_selectedConfig.Name}.");
+    }
+
+    /// <summary>Generates a secure random 20-character RCON password and fills the password field.</summary>
+    private void BtnGenerateRconPassword_Click(object sender, RoutedEventArgs e)
+    {
+        CfgRconPassword.Text = PasswordHelper.Generate(20);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

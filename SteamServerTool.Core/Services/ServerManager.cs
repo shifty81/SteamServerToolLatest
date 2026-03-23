@@ -38,9 +38,10 @@ public class ServerCrashedEventArgs : EventArgs
 
 public class ServerManager
 {
-    private readonly Dictionary<string, Process>  _processes  = new();
-    private readonly Dictionary<string, DateTime> _startTimes = new();
-    private readonly Dictionary<string, ServerStatus> _statuses = new();
+    private readonly Dictionary<string, Process>       _processes    = new();
+    private readonly Dictionary<string, DateTime>      _startTimes   = new();
+    private readonly Dictionary<string, ServerStatus>  _statuses     = new();
+    private readonly Dictionary<string, StreamWriter>  _stdinWriters = new();
 
     // CPU tracking – previous sample per server
     private readonly Dictionary<string, (TimeSpan CpuTime, DateTime Wall)> _cpuSamples = new();
@@ -162,14 +163,17 @@ public class ServerManager
 
         AppLogger.Info($"Starting server '{config.Name}' (AppID {config.AppId}).");
 
+        var useStdin = !string.IsNullOrWhiteSpace(config.StdinStopCommand);
+
         var psi = new ProcessStartInfo
         {
-            FileName = Path.Combine(config.Dir, config.Executable),
-            Arguments = config.LaunchArgs,
-            WorkingDirectory = config.Dir,
-            UseShellExecute = false,
+            FileName               = Path.Combine(config.Dir, config.Executable),
+            Arguments              = config.LaunchArgs,
+            WorkingDirectory       = config.Dir,
+            UseShellExecute        = false,
             RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardError  = true,
+            RedirectStandardInput  = useStdin,
         };
 
         foreach (var kv in config.EnvironmentVariables)
@@ -181,6 +185,7 @@ public class ServerManager
         {
             var exitCode = process.ExitCode;
             _processes.Remove(config.Name);
+            _stdinWriters.Remove(config.Name);
 
             if (exitCode != 0)
             {
@@ -202,6 +207,9 @@ public class ServerManager
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
+        if (useStdin)
+            _stdinWriters[config.Name] = process.StandardInput;
+
         _processes[config.Name] = process;
         _startTimes[config.Name] = DateTime.UtcNow;
         SetStatus(config.Name, ServerStatus.Running);
@@ -216,13 +224,34 @@ public class ServerManager
             return;
         }
 
-        var config = Servers.FirstOrDefault(s => s.Name == name);
+        var config  = Servers.FirstOrDefault(s => s.Name == name);
         var graceful = config?.GracefulShutdownSeconds ?? 15;
 
         AppLogger.Info($"Stopping server '{name}' (graceful timeout: {graceful}s).");
         try
         {
-            process.CloseMainWindow();
+            // Prefer stdin-based graceful stop (e.g. "/stop" for Vintage Story, "stop" for
+            // Minecraft) so the server can save world data before exiting cleanly.
+            if (!string.IsNullOrWhiteSpace(config?.StdinStopCommand) &&
+                _stdinWriters.TryGetValue(name, out var stdin))
+            {
+                AppLogger.Info($"Sending graceful stop command to '{name}' via stdin.");
+                try
+                {
+                    stdin.WriteLine(config.StdinStopCommand);
+                    stdin.Flush();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn($"Failed to write stop command to '{name}': {ex.Message}");
+                }
+            }
+            else
+            {
+                // Fall back to closing the main window (works for windowed / Source-engine servers).
+                process.CloseMainWindow();
+            }
+
             if (!process.WaitForExit(graceful * 1000))
             {
                 AppLogger.Warn($"Server '{name}' did not exit within {graceful}s — force-killing.");
@@ -235,6 +264,7 @@ public class ServerManager
         }
 
         _processes.Remove(name);
+        _stdinWriters.Remove(name);
 
         if (_startTimes.TryGetValue(name, out var start) && config != null)
         {
@@ -262,6 +292,7 @@ public class ServerManager
         catch { /* already dead */ }
 
         _processes.Remove(name);
+        _stdinWriters.Remove(name);
 
         if (_startTimes.TryGetValue(name, out var start) && config != null)
         {

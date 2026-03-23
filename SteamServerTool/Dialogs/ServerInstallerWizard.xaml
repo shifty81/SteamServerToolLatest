@@ -51,6 +51,7 @@
             <Grid x:Name="Step1Panel">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -60,8 +61,34 @@
                            Foreground="{StaticResource DimForegroundBrush}"
                            Margin="0,0,0,12"/>
 
+                <!-- Remote Server quick-add option -->
+                <Border Grid.Row="1"
+                        x:Name="RemoteServerBanner"
+                        Background="#1A1A2A"
+                        BorderBrush="{StaticResource AccentBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Padding="14,10" Margin="0,0,0,12"
+                        Cursor="Hand"
+                        MouseLeftButtonUp="BtnAddRemoteInWizard_Click">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" Text="🌐" FontSize="22"
+                                   VerticalAlignment="Center" Margin="0,0,12,0"
+                                   Foreground="{StaticResource AccentBrush}"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Remote Server (RCON only)"
+                                       FontWeight="SemiBold" FontSize="13"/>
+                            <TextBlock Text="Already have a server running elsewhere? Add it by RCON host/port to monitor and send commands — no local install needed."
+                                       TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{StaticResource DimForegroundBrush}"/>
+                        </StackPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="→" FontSize="18"
+                                   VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Foreground="{StaticResource AccentBrush}"/>
+                    </DockPanel>
+                </Border>
+
                 <!-- Template gallery -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                     <WrapPanel x:Name="TemplateGallery" Orientation="Horizontal"/>
                 </ScrollViewer>
             </Grid>
@@ -157,8 +184,19 @@
 
                         <!-- RCON Password -->
                         <Label Grid.Row="10" Grid.Column="0" Content="RCON Password:" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="10" Grid.Column="1"
-                                 x:Name="WizRconPassword" Tag="Optional — leave blank to skip"/>
+                        <Grid Grid.Row="10" Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" x:Name="WizRconPassword"
+                                     Tag="Optional — leave blank to skip"
+                                     Margin="0,0,4,0" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="⚡ Generate"
+                                    Padding="8,4" VerticalAlignment="Center"
+                                    ToolTip="Generate a secure random RCON password"
+                                    Click="BtnGenerateWizPassword_Click"/>
+                        </Grid>
                     </Grid>
 
                     <!-- Auto-start checkbox -->
