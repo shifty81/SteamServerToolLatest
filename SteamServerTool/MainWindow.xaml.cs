@@ -280,6 +280,20 @@ public partial class MainWindow : Window
         Dispatcher.InvokeAsync(() =>
         {
             Log($"[CRASH] {e.ServerName} exited with code {e.ExitCode}.");
+
+            var result = MessageBox.Show(
+                $"Server '{e.ServerName}' crashed (exit code {e.ExitCode}).\n\n" +
+                "Would you like to submit a bug report on GitHub?",
+                "Server Crash Detected",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                var body = GitHubIssueReporter.FormatServerCrashReport(e.ServerName, e.ExitCode);
+                GitHubIssueReporter.OpenNewIssue(
+                    $"[Crash] {e.ServerName} exited with code {e.ExitCode}", body);
+            }
         });
     }
 
@@ -2080,6 +2094,8 @@ public partial class MainWindow : Window
         var line = $"[{DateTime.Now:HH:mm:ss}] {msg}";
         TxtOpLog.AppendText(line + Environment.NewLine);
         TxtOpLog.ScrollToEnd();
+        // Mirror every UI log entry to the rolling file log.
+        App.Logger.Info(msg);
     }
 
     private void BtnClearLog_Click(object sender, RoutedEventArgs e) => TxtOpLog.Clear();
