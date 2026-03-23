@@ -43,8 +43,7 @@
                     <Button x:Name="BtnStopAll"     Content="■ Stop All"    Margin="0,0,6,0" Click="BtnStopAll_Click"
                             Style="{StaticResource DangerButton}"/>
                     <Button x:Name="BtnSaveConfig"  Content="💾 Save"       Margin="0,0,6,0" Click="BtnSaveConfig_Click"/>
-                    <Button x:Name="BtnInstallSteamCmd" Content="⬇ Install/Update via SteamCMD"
-                            Margin="0,0,6,0" Click="BtnInstallSteamCmd_Click"/>
+                    <Button x:Name="BtnToggleView"  Content="📊 Dashboard"  Margin="0,0,6,0" Click="BtnToggleView_Click"/>
                 </StackPanel>
 
                 <!-- Right: status summary -->
@@ -64,6 +63,35 @@
              ROW 1 — MAIN CONTENT  (3 columns)
              ═══════════════════════════════════════ -->
         <Grid Grid.Row="1" Margin="8">
+
+            <!-- ── DASHBOARD VIEW (shown when toggled) ── -->
+            <Border x:Name="DashboardView"
+                    Visibility="Collapsed"
+                    Background="{StaticResource PanelBgBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0"
+                            Background="{StaticResource ControlBgBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,0,0,1" Padding="14,10">
+                        <TextBlock Text="SERVER DASHBOARD" FontWeight="SemiBold" FontSize="11"
+                                   Foreground="{StaticResource DimForegroundBrush}"/>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <WrapPanel x:Name="DashboardPanel"
+                                   Orientation="Horizontal"
+                                   Margin="12"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- ── CONFIG VIEW (default) ── -->
+            <Grid x:Name="ConfigView">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="230" MinWidth="180"/>
                 <ColumnDefinition Width="5"/>
@@ -320,127 +348,199 @@
 
                         <!-- ── TAB: Config ── -->
                         <TabItem Header="Config">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel Margin="12" MaxWidth="700">
-                                    <TextBlock Text="SERVER CONFIGURATION" FontWeight="SemiBold" FontSize="11"
-                                               Foreground="{StaticResource DimForegroundBrush}"
-                                               Margin="0,0,0,12"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="220" MinWidth="160"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
+                                <!-- ── Template Gallery (left panel) ── -->
+                                <Border Grid.Column="0"
+                                        Background="{StaticResource ControlBgBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="0,0,1,0">
                                     <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="190"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="60"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
-                                            <RowDefinition Height="36"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
                                         </Grid.RowDefinitions>
-
-                                        <Label Grid.Row="0"  Grid.Column="0" Content="Name:"              VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="CfgName"            Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="1"  Grid.Column="0" Content="App ID:"            VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="CfgAppId"           Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="2"  Grid.Column="0" Content="Directory:"         VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="CfgDir"             Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="3"  Grid.Column="0" Content="Executable:"        VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="CfgExecutable"      Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="4"  Grid.Column="0" Content="Launch Args:"       VerticalAlignment="Top" Margin="0,6,0,0"/>
-                                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="CfgLaunchArgs"
-                                                 Margin="0,2" AcceptsReturn="True"
-                                                 TextWrapping="Wrap" Height="56"/>
-
-                                        <Label Grid.Row="5"  Grid.Column="0" Content="RCON Host:"         VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="CfgRconHost"        Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="6"  Grid.Column="0" Content="RCON Port:"         VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="6" Grid.Column="1" x:Name="CfgRconPort"        Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="7"  Grid.Column="0" Content="RCON Password:"     VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="7" Grid.Column="1" x:Name="CfgRconPassword"    Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="8"  Grid.Column="0" Content="Backup Folder:"     VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="8" Grid.Column="1" x:Name="CfgBackupFolder"    Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="9"  Grid.Column="0" Content="Keep Backups:"      VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="9" Grid.Column="1" x:Name="CfgKeepBackups"     Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="10" Grid.Column="0" Content="Backup Interval:"   VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="10" Grid.Column="1" x:Name="CfgBackupInterval" Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="11" Grid.Column="0" Content="Restart Interval:"  VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="11" Grid.Column="1" x:Name="CfgRestartInterval" Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="12" Grid.Column="0" Content="Max Players:"       VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="12" Grid.Column="1" x:Name="CfgMaxPlayers"     Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="13" Grid.Column="0" Content="Group:"             VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="13" Grid.Column="1" x:Name="CfgGroup"          Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="14" Grid.Column="0" Content="Discord Webhook:"   VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="14" Grid.Column="1" x:Name="CfgDiscordWebhook" Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="15" Grid.Column="0" Content="Shutdown (secs):"   VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="15" Grid.Column="1" x:Name="CfgShutdownSecs"   Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="16" Grid.Column="0" Content="Query Port:"        VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="16" Grid.Column="1" x:Name="CfgQueryPort"      Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="17" Grid.Column="0" Content="Tags:"              VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="17" Grid.Column="1" x:Name="CfgTags"           Margin="0,2" VerticalAlignment="Center"
-                                                 Tag="Comma-separated tags (e.g. production,ark)"/>
-
-                                        <Label Grid.Row="18" Grid.Column="0" Content="Warn Before Restart (min):" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="18" Grid.Column="1" x:Name="CfgRestartWarnMins" Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="19" Grid.Column="0" Content="Warn Message:"      VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="19" Grid.Column="1" x:Name="CfgRestartWarnMsg"  Margin="0,2" VerticalAlignment="Center"
-                                                 Tag="e.g. Server restarting in {minutes} minutes!"/>
-
-                                        <Label Grid.Row="20" Grid.Column="0" Content="CPU Alert (%):"     VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="20" Grid.Column="1" x:Name="CfgCpuAlert"       Margin="0,2" VerticalAlignment="Center"/>
-
-                                        <Label Grid.Row="21" Grid.Column="0" Content="Mem Alert (MB):"    VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="21" Grid.Column="1" x:Name="CfgMemAlert"       Margin="0,2" VerticalAlignment="Center"/>
+                                        <Border Grid.Row="0"
+                                                BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                Padding="10,8">
+                                            <TextBlock Text="TEMPLATES" FontWeight="SemiBold" FontSize="11"
+                                                       Foreground="{StaticResource DimForegroundBrush}"/>
+                                        </Border>
+                                        <ScrollViewer Grid.Row="1"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      Padding="5">
+                                            <ItemsControl x:Name="TemplateList">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Margin="0,0,0,3"
+                                                                HorizontalContentAlignment="Left"
+                                                                Padding="7,5"
+                                                                Tag="{Binding}"
+                                                                Click="BtnApplyTemplate_Click">
+                                                            <StackPanel>
+                                                                <DockPanel>
+                                                                    <TextBlock DockPanel.Dock="Left"
+                                                                               Text="{Binding Icon}"
+                                                                               FontSize="15"
+                                                                               VerticalAlignment="Center"
+                                                                               Margin="0,0,7,0"/>
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               FontWeight="SemiBold"
+                                                                               FontSize="12"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               VerticalAlignment="Center"/>
+                                                                </DockPanel>
+                                                                <TextBlock Text="{Binding Description}"
+                                                                           FontSize="10"
+                                                                           Foreground="{StaticResource DimForegroundBrush}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           Margin="22,2,0,0"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
                                     </Grid>
+                                </Border>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                        <CheckBox x:Name="CfgAutoUpdate"        Content="Auto Update"            Margin="0,0,16,0"/>
-                                        <CheckBox x:Name="CfgAutoStart"         Content="Auto Start on Launch"   Margin="0,0,16,0"/>
-                                        <CheckBox x:Name="CfgFavorite"          Content="Favorite"               Margin="0,0,16,0"/>
-                                        <CheckBox x:Name="CfgBackupBeforeRestart" Content="Backup Before Restart"/>
+                                <!-- ── Config Form (right panel) ── -->
+                                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Margin="12" MaxWidth="700">
+                                        <TextBlock Text="SERVER CONFIGURATION" FontWeight="SemiBold" FontSize="11"
+                                                   Foreground="{StaticResource DimForegroundBrush}"
+                                                   Margin="0,0,0,12"/>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="190"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="60"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                                <RowDefinition Height="36"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Label Grid.Row="0"  Grid.Column="0" Content="Name:"              VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="0" Grid.Column="1" x:Name="CfgName"            Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="1"  Grid.Column="0" Content="App ID:"            VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="CfgAppId"           Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="2"  Grid.Column="0" Content="Directory:"         VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="2" Grid.Column="1" x:Name="CfgDir"             Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="3"  Grid.Column="0" Content="Executable:"        VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="3" Grid.Column="1" x:Name="CfgExecutable"      Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="4"  Grid.Column="0" Content="Launch Args:"       VerticalAlignment="Top" Margin="0,6,0,0"/>
+                                            <TextBox Grid.Row="4" Grid.Column="1" x:Name="CfgLaunchArgs"
+                                                     Margin="0,2" AcceptsReturn="True"
+                                                     TextWrapping="Wrap" Height="56"/>
+                                            <Label Grid.Row="5"  Grid.Column="0" Content="RCON Host:"         VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="5" Grid.Column="1" x:Name="CfgRconHost"        Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="6"  Grid.Column="0" Content="RCON Port:"         VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="6" Grid.Column="1" x:Name="CfgRconPort"        Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="7"  Grid.Column="0" Content="RCON Password:"     VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="7" Grid.Column="1" x:Name="CfgRconPassword"    Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="8"  Grid.Column="0" Content="Backup Folder:"     VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="8" Grid.Column="1" x:Name="CfgBackupFolder"    Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="9"  Grid.Column="0" Content="Keep Backups:"      VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="9" Grid.Column="1" x:Name="CfgKeepBackups"     Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="10" Grid.Column="0" Content="Backup Interval:"   VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="10" Grid.Column="1" x:Name="CfgBackupInterval" Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="11" Grid.Column="0" Content="Restart Interval:"  VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="11" Grid.Column="1" x:Name="CfgRestartInterval" Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="12" Grid.Column="0" Content="Max Players:"       VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="12" Grid.Column="1" x:Name="CfgMaxPlayers"     Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="13" Grid.Column="0" Content="Group:"             VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="13" Grid.Column="1" x:Name="CfgGroup"          Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="14" Grid.Column="0" Content="Discord Webhook:"   VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="14" Grid.Column="1" x:Name="CfgDiscordWebhook" Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="15" Grid.Column="0" Content="Shutdown (secs):"   VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="15" Grid.Column="1" x:Name="CfgShutdownSecs"   Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="16" Grid.Column="0" Content="Query Port:"        VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="16" Grid.Column="1" x:Name="CfgQueryPort"      Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="17" Grid.Column="0" Content="Tags:"              VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="17" Grid.Column="1" x:Name="CfgTags"           Margin="0,2" VerticalAlignment="Center"
+                                                     Tag="Comma-separated tags (e.g. production,ark)"/>
+                                            <Label Grid.Row="18" Grid.Column="0" Content="Warn Before Restart (min):" VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="18" Grid.Column="1" x:Name="CfgRestartWarnMins" Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="19" Grid.Column="0" Content="Warn Message:"      VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="19" Grid.Column="1" x:Name="CfgRestartWarnMsg"  Margin="0,2" VerticalAlignment="Center"
+                                                     Tag="e.g. Server restarting in {minutes} minutes!"/>
+                                            <Label Grid.Row="20" Grid.Column="0" Content="CPU Alert (%):"     VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="20" Grid.Column="1" x:Name="CfgCpuAlert"       Margin="0,2" VerticalAlignment="Center"/>
+                                            <Label Grid.Row="21" Grid.Column="0" Content="Mem Alert (MB):"    VerticalAlignment="Center"/>
+                                            <TextBox Grid.Row="21" Grid.Column="1" x:Name="CfgMemAlert"       Margin="0,2" VerticalAlignment="Center"/>
+                                        </Grid>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                            <CheckBox x:Name="CfgAutoUpdate"          Content="Auto Update"            Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="CfgAutoStart"           Content="Auto Start on Launch"   Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="CfgFavorite"            Content="Favorite"               Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="CfgBackupBeforeRestart" Content="Backup Before Restart"/>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                            <Button Content="💾 Apply Config Changes"
+                                                    Style="{StaticResource AccentButton}"
+                                                    Click="BtnApplyConfig_Click"
+                                                    Margin="0,0,10,0"/>
+                                            <Button Content="⬇ Install/Update via SteamCMD"
+                                                    Click="BtnInstallSteamCmd_Click"/>
+                                        </StackPanel>
                                     </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </TabItem>
 
-                                    <Button Content="💾 Apply Config Changes"
-                                            Margin="0,14,0,0" HorizontalAlignment="Left"
-                                            Style="{StaticResource AccentButton}"
-                                            Click="BtnApplyConfig_Click"/>
-                                </StackPanel>
-                            </ScrollViewer>
+                        <!-- ── TAB: Config Files (INI editor) ── -->
+                        <TabItem Header="Config Files"
+                                 GotFocus="TabConfigFiles_GotFocus">
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Text="CONFIG FILE EDITOR" FontWeight="SemiBold" FontSize="11"
+                                               Foreground="{StaticResource DimForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="↻ Rescan Files"
+                                            Click="BtnRescanConfigFiles_Click"/>
+                                </DockPanel>
+                                <TabControl Grid.Row="1"
+                                            x:Name="IniFileTabs"
+                                            Background="Transparent"
+                                            BorderThickness="1"
+                                            BorderBrush="{StaticResource BorderBrush}"/>
+                            </Grid>
                         </TabItem>
 
                         <!-- ── TAB: Mods ── -->
@@ -722,6 +822,7 @@
                     </TabControl>
                 </Grid>
             </Border>
+            </Grid><!-- /ConfigView -->
         </Grid>
 
         <!-- ═══════════════════════════════════════

@@ -1,0 +1,122 @@
+<Window x:Class="SteamServerTool.Dialogs.SteamCmdNotificationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SteamCMD — Notice &amp; Agreement"
+        Height="480" Width="580"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource DarkBgBrush}"
+        Foreground="{StaticResource ForegroundBrush}"
+        FontFamily="Segoe UI" FontSize="13">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="⬇" FontSize="26" VerticalAlignment="Center" Margin="0,0,10,0"
+                       Foreground="{StaticResource AccentBrush}"/>
+            <StackPanel>
+                <TextBlock Text="Install / Update Server via SteamCMD"
+                           FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Please read the following before continuing."
+                           Foreground="{StaticResource DimForegroundBrush}" FontSize="12"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Info scroll box -->
+        <Border Grid.Row="2"
+                Background="{StaticResource PanelBgBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1" CornerRadius="6"
+                Padding="14">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <TextBlock Text="What is SteamCMD?" FontWeight="SemiBold"
+                               Foreground="{StaticResource AccentBrush}" Margin="0,0,0,6"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12">
+SteamCMD is a command-line version of the Steam client, published by Valve Corporation.
+It is used to download, install and update dedicated game server files from Steam.
+                    </TextBlock>
+
+                    <TextBlock Text="What will happen?" FontWeight="SemiBold"
+                               Foreground="{StaticResource AccentBrush}" Margin="0,0,0,6"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12">
+Clicking <Bold>I Agree &amp; Install</Bold> will:
+
+  • Launch SteamCMD with anonymous login
+  • Download server files for the configured App ID to the server directory
+  • Accept Valve's Steam Subscriber Agreement on your behalf (required by SteamCMD)
+  • Some games require additional End User License Agreement acceptance — SteamCMD will prompt for these automatically
+                    </TextBlock>
+
+                    <TextBlock Text="Required Agreements" FontWeight="SemiBold"
+                               Foreground="{StaticResource AccentBrush}" Margin="0,0,0,6"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12">
+By continuing you agree to:
+
+  • Steam Subscriber Agreement — https://store.steampowered.com/subscriber_agreement/
+  • Individual game server EULA (varies by game — review on the Steam store page)
+                    </TextBlock>
+
+                    <TextBlock Text="Bandwidth &amp; Storage" FontWeight="SemiBold"
+                               Foreground="{StaticResource AccentBrush}" Margin="0,0,0,6"/>
+                    <TextBlock TextWrapping="Wrap">
+Game server files can range from a few hundred MB to over 30 GB depending on the title.
+Ensure you have sufficient disk space and a stable internet connection before proceeding.
+                    </TextBlock>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Agreement checkbox -->
+        <CheckBox Grid.Row="4"
+                  x:Name="ChkAgree"
+                  Content="I have read the above and agree to the Steam Subscriber Agreement and applicable game server EULAs."
+                  Foreground="{StaticResource ForegroundBrush}"
+                  Checked="ChkAgree_Changed"
+                  Unchecked="ChkAgree_Changed"/>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       x:Name="TxtHint"
+                       Text="Check the box above to enable the Install button."
+                       Foreground="{StaticResource DimForegroundBrush}"
+                       VerticalAlignment="Center" FontSize="11"/>
+
+            <Button Grid.Column="2"
+                    x:Name="BtnCancel"
+                    Content="Cancel"
+                    Padding="18,8"
+                    IsCancel="True"
+                    Click="BtnCancel_Click"/>
+
+            <Button Grid.Column="4"
+                    x:Name="BtnInstall"
+                    Content="⬇ I Agree &amp; Install"
+                    Padding="18,8"
+                    IsEnabled="False"
+                    Style="{StaticResource AccentButton}"
+                    Click="BtnInstall_Click"/>
+        </Grid>
+    </Grid>
+</Window>

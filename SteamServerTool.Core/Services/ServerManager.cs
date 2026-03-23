@@ -38,9 +38,12 @@ public class ServerCrashedEventArgs : EventArgs
 
 public class ServerManager
 {
-    private readonly Dictionary<string, Process> _processes = new();
+    private readonly Dictionary<string, Process>  _processes  = new();
     private readonly Dictionary<string, DateTime> _startTimes = new();
     private readonly Dictionary<string, ServerStatus> _statuses = new();
+
+    // CPU tracking – previous sample per server
+    private readonly Dictionary<string, (TimeSpan CpuTime, DateTime Wall)> _cpuSamples = new();
 
     public List<ServerConfig> Servers { get; private set; } = new();
 
@@ -93,6 +96,52 @@ public class ServerManager
         return _startTimes.TryGetValue(name, out var start)
             ? DateTime.UtcNow - start
             : null;
+    }
+
+    /// <summary>Returns approximate CPU usage percent for a running server process.</summary>
+    public double GetCpuPercent(string name)
+    {
+        if (!_processes.TryGetValue(name, out var process) || process.HasExited)
+            return 0;
+
+        try
+        {
+            process.Refresh();
+            var newCpu  = process.TotalProcessorTime;
+            var newWall = DateTime.UtcNow;
+
+            // CPU% = (cpu_time_delta_ms / (wall_time_delta_ms × core_count)) × 100
+            // This normalises the raw multi-core processor time to a 0-100% single-core-equivalent figure.
+            if (_cpuSamples.TryGetValue(name, out var prev))
+            {
+                var cpuDelta  = (newCpu  - prev.CpuTime).TotalMilliseconds;
+                var wallDelta = (newWall - prev.Wall).TotalMilliseconds;
+                _cpuSamples[name] = (newCpu, newWall);
+
+                if (wallDelta <= 0) return 0;
+                return Math.Min(100, cpuDelta / (wallDelta * Environment.ProcessorCount) * 100.0);
+            }
+
+            _cpuSamples[name] = (newCpu, newWall);
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>Returns working-set memory in megabytes for a running server process.</summary>
+    public long GetMemoryMb(string name)
+    {
+        if (!_processes.TryGetValue(name, out var process) || process.HasExited)
+            return 0;
+        try
+        {
+            process.Refresh();
+            return process.WorkingSet64 / (1024 * 1024);
+        }
+        catch { return 0; }
     }
 
     public virtual void StartServer(ServerConfig config)
