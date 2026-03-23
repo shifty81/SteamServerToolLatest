@@ -33,6 +33,7 @@ public class RconClient : IDisposable
 
     public async Task<bool> ConnectAsync()
     {
+        AppLogger.Info($"RCON connecting to {_host}:{_port}.");
         try
         {
             _client = new TcpClient();
@@ -43,13 +44,21 @@ public class RconClient : IDisposable
             await SendPacketAsync(authId, SERVERDATA_AUTH, _password);
 
             var response = await ReadPacketAsync();
-            if (response == null) return false;
+            if (response == null)
+            {
+                AppLogger.Warn($"RCON auth response was null for {_host}:{_port}.");
+                return false;
+            }
 
             // Auth response: id == -1 means failed
-            return response.Value.Id != -1;
+            var ok = response.Value.Id != -1;
+            if (ok) AppLogger.Info($"RCON authenticated to {_host}:{_port}.");
+            else    AppLogger.Warn($"RCON authentication failed for {_host}:{_port} (bad password?).");
+            return ok;
         }
-        catch
+        catch (Exception ex)
         {
+            AppLogger.Error($"RCON connect to {_host}:{_port} failed: {ex.Message}");
             Disconnect();
             return false;
         }
@@ -83,6 +92,7 @@ public class RconClient : IDisposable
 
     public void Disconnect()
     {
+        AppLogger.Info($"RCON disconnecting from {_host}:{_port}.");
         _stream?.Close();
         _client?.Close();
         _stream = null;

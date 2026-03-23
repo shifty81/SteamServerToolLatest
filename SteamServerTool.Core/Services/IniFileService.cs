@@ -13,6 +13,9 @@ public class IniFileService
 {
     private const int MaxHistory = 16;
 
+    /// <summary>Maximum file size (in bytes) that the editor will attempt to load (5 MB).</summary>
+    private const long MaxFileSizeBytes = 5 * 1024 * 1024;
+
     /// <summary>
     /// File extensions considered plain key=value config files that the INI editor can parse.
     /// </summary>
@@ -28,6 +31,20 @@ public class IniFileService
     private static readonly string[] TextPatterns =
     {
         "*.json", "*.xml", "*.txt",
+    };
+
+    /// <summary>
+    /// Known binary-file extensions that must never be opened as text.
+    /// Any file with one of these extensions is silently skipped during scanning.
+    /// </summary>
+    private static readonly HashSet<string> BinaryExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".dll", ".so", ".dylib", ".pak", ".bin", ".dat", ".db", ".sqlite",
+        ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz",
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".dds", ".ico",
+        ".wav", ".mp3", ".ogg", ".flac",
+        ".mp4", ".avi", ".mkv",
+        ".pdf",
     };
 
     // ─── Discovery ────────────────────────────────────────────────────────
@@ -60,12 +77,24 @@ public class IniFileService
     }
 
     /// <summary>
-    /// Resolves a manually-specified file path into an IniFileInfo, verifying it exists.
-    /// Returns null if the file does not exist or cannot be accessed.
+    /// Resolves a manually-specified file path into an IniFileInfo, verifying it exists
+    /// and is safe to open (not binary, not over the size limit).
+    /// Returns null if the file does not exist, cannot be accessed, or is unsafe to display.
     /// </summary>
     public IniFileInfo? ResolveManualFile(string filePath, string serverDir)
     {
         if (!File.Exists(filePath)) return null;
+
+        // Refuse to open known binary extensions
+        if (BinaryExtensions.Contains(Path.GetExtension(filePath)))
+            return null;
+
+        // Refuse to open files that exceed the size limit
+        try { if (new FileInfo(filePath).Length > MaxFileSizeBytes) return null; }
+        catch { return null; }
+
+        // Refuse to open files that contain binary content
+        if (IsBinaryFile(filePath)) return null;
 
         // Try to make a relative path for the label
         string rel = filePath;
@@ -95,6 +124,22 @@ public class IniFileService
                 if (file.Contains(histDir, StringComparison.OrdinalIgnoreCase))
                     continue;
 
+                // Skip known binary extensions
+                if (BinaryExtensions.Contains(Path.GetExtension(file)))
+                    continue;
+
+                // Skip files that exceed the size limit
+                try
+                {
+                    if (new FileInfo(file).Length > MaxFileSizeBytes)
+                        continue;
+                }
+                catch { continue; }
+
+                // Skip files whose first bytes contain null characters (binary content)
+                if (IsBinaryFile(file))
+                    continue;
+
                 var relative = file;
                 try
                 {
@@ -114,6 +159,28 @@ public class IniFileService
         catch { /* skip inaccessible folders */ }
     }
 
+    /// <summary>
+    /// Reads the first 8 KB of a file and returns <c>true</c> if null bytes are found,
+    /// which is a reliable indicator of binary content.
+    /// </summary>
+    private static bool IsBinaryFile(string filePath)
+    {
+        try
+        {
+            using var fs  = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var buf  = new byte[Math.Min(8192, fs.Length)];
+            var read = fs.Read(buf, 0, buf.Length);
+            for (var i = 0; i < read; i++)
+                if (buf[i] == 0) return true;
+            return false;
+        }
+        catch
+        {
+            // If we cannot inspect the file, treat it as binary to be safe.
+            return true;
+        }
+    }
+
     // ─── Parsing ──────────────────────────────────────────────────────────
     public List<IniEntry> ParseFile(string filePath)
     {
@@ -124,39 +191,50 @@ public class IniFileService
         var section  = "";
         var lineNum  = 0;
 
-        foreach (var raw in File.ReadLines(filePath))
+        try
         {
-            lineNum++;
-            var line = raw.TrimEnd();
-
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';') || line.StartsWith('#'))
-                continue;
-
-            // INI section header  [SectionName]
-            if (line.StartsWith('[') && line.Contains(']'))
+            // Use Latin-1 (ISO-8859-1) so the read never throws on non-UTF-8 bytes.
+            // Every possible byte value maps to a valid Latin-1 character, which is
+            // sufficient for parsing key=value structure regardless of the source encoding.
+            foreach (var raw in File.ReadLines(filePath, System.Text.Encoding.Latin1))
             {
-                var closeIdx = line.IndexOf(']');
-                if (closeIdx > 1)
-                    section = line.Substring(1, closeIdx - 1).Trim();
-                continue;
-            }
+                lineNum++;
+                var line = raw.TrimEnd();
 
-            // Key = Value  (also handles Key: Value for YAML-style)
-            int sep = line.IndexOf('=');
-            if (sep <= 0)
-            {
-                // YAML/TOML colon separator: "key: value"
-                sep = line.IndexOf(':');
-                if (sep <= 0 || line.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                             || line.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';') || line.StartsWith('#'))
                     continue;
+
+                // INI section header  [SectionName]
+                if (line.StartsWith('[') && line.Contains(']'))
+                {
+                    var closeIdx = line.IndexOf(']');
+                    if (closeIdx > 1)
+                        section = line.Substring(1, closeIdx - 1).Trim();
+                    continue;
+                }
+
+                // Key = Value  (also handles Key: Value for YAML-style)
+                int sep = line.IndexOf('=');
+                if (sep <= 0)
+                {
+                    // YAML/TOML colon separator: "key: value"
+                    sep = line.IndexOf(':');
+                    if (sep <= 0 || line.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                                 || line.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                var key = line[..sep].Trim();
+                var val = line[(sep + 1)..].Trim();
+
+                if (!string.IsNullOrEmpty(key))
+                    entries.Add(new IniEntry(section, key, val, lineNum));
             }
-
-            var key = line[..sep].Trim();
-            var val = line[(sep + 1)..].Trim();
-
-            if (!string.IsNullOrEmpty(key))
-                entries.Add(new IniEntry(section, key, val, lineNum));
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"ParseFile failed for '{filePath}': {ex.Message}");
+            // Return whatever entries were collected before the error.
         }
 
         return entries;
@@ -165,8 +243,10 @@ public class IniFileService
     // ─── Saving with history ──────────────────────────────────────────────
     public void SaveFile(string filePath, IReadOnlyList<IniEntry> entries)
     {
+        AppLogger.Info($"Saving config file '{filePath}' ({entries.Count} entries).");
         ArchiveCurrentVersion(filePath);
         WriteEntries(filePath, entries);
+        AppLogger.Info($"Config file saved: '{Path.GetFileName(filePath)}'.");
     }
 
     private static void WriteEntries(string filePath, IReadOnlyList<IniEntry> entries)
@@ -207,7 +287,9 @@ public class IniFileService
         if (!File.Exists(historyPath))
             throw new FileNotFoundException($"History file not found: {historyPath}");
 
+        AppLogger.Info($"Reverting '{filePath}' to history version '{Path.GetFileName(historyPath)}'.");
         File.Copy(historyPath, filePath, overwrite: true);
+        AppLogger.Info($"Revert complete for '{Path.GetFileName(filePath)}'.");
     }
 
     // ─── Internals ────────────────────────────────────────────────────────

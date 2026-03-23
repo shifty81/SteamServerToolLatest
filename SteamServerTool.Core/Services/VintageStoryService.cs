@@ -102,6 +102,7 @@ public class VintageStoryService
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"Vintage Story server download failed: {ex}");
             progress?.Report($"[ERROR] Vintage Story download failed: {ex.Message}");
             return false;
         }

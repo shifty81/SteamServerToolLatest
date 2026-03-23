@@ -64,6 +64,7 @@ public class WorkshopService
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"WorkshopService.SearchAsync failed: {ex.Message}");
             return (new(), 0, $"Search failed: {ex.Message}");
         }
     }
@@ -116,6 +117,7 @@ public class WorkshopService
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"WorkshopService.GetCollectionItemsAsync failed: {ex.Message}");
             return (new(), $"Failed to retrieve collection: {ex.Message}");
         }
 
@@ -171,6 +173,7 @@ public class WorkshopService
         }
         catch (Exception ex)
         {
+            AppLogger.Error($"WorkshopService.GetItemDetailsAsync failed: {ex.Message}");
             return (new(), $"Failed to retrieve item details: {ex.Message}");
         }
     }
