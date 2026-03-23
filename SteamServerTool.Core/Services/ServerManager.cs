@@ -235,7 +235,7 @@ public class ServerManager
             if (!string.IsNullOrWhiteSpace(config?.StdinStopCommand) &&
                 _stdinWriters.TryGetValue(name, out var stdin))
             {
-                AppLogger.Info($"Sending stop command '{config.StdinStopCommand}' to '{name}' via stdin.");
+                AppLogger.Info($"Sending graceful stop command to '{name}' via stdin.");
                 try
                 {
                     stdin.WriteLine(config.StdinStopCommand);

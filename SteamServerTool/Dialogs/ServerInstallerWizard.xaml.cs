@@ -32,6 +32,9 @@ public partial class ServerInstallerWizard : Window
     private static readonly string ServersBaseDir =
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Servers");
 
+    private static readonly string BackupsBaseDir =
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");
+
     // ─── Constructor ──────────────────────────────────────────────────────
     public ServerInstallerWizard(
         SteamCmdService     steamCmdService,
@@ -310,6 +313,24 @@ public partial class ServerInstallerWizard : Window
             WizDir.Text = dlg.FolderName;
     }
 
+    /// <summary>Handles "Remote Server" banner click — opens the AddRemoteServerDialog directly.</summary>
+    private void BtnAddRemoteInWizard_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        var dlg = new AddRemoteServerDialog { Owner = this };
+        if (dlg.ShowDialog() == true && dlg.Result != null)
+        {
+            Result = dlg.Result;
+            DialogResult = true;
+            Close();
+        }
+    }
+
+    /// <summary>Generates a secure random RCON password and populates the wizard password field.</summary>
+    private void BtnGenerateWizPassword_Click(object sender, RoutedEventArgs e)
+    {
+        WizRconPassword.Text = PasswordHelper.Generate(20);
+    }
+
     // ─── Step 3: summary & deploy ─────────────────────────────────────────
     private void PopulateStep3Summary()
     {
@@ -423,15 +444,18 @@ public partial class ServerInstallerWizard : Window
     // ─── Config builder ───────────────────────────────────────────────────
     private ServerConfig BuildConfig()
     {
+        var name = WizName.Text.Trim();
         var cfg = new ServerConfig
         {
-            Name       = WizName.Text.Trim(),
+            Name       = name,
             Dir        = WizDir.Text.Trim(),
             Group      = WizGroup.Text.Trim(),
             LaunchArgs = WizLaunchArgs.Text,
             MaxPlayers = int.TryParse(WizMaxPlayers.Text, out var mp) ? mp : 0,
             QueryPort  = int.TryParse(WizQueryPort.Text, out var qp) ? qp : 0,
             AutoStartOnLaunch = WizAutoStart.IsChecked == true,
+            // Default backup folder to Backups/<ServerName> next to the executable.
+            BackupFolder = Path.Combine(BackupsBaseDir, string.Concat(name.Split(Path.GetInvalidFileNameChars()))),
             Rcon = new Core.Models.RconConfig
             {
                 Host     = "127.0.0.1",
@@ -442,8 +466,10 @@ public partial class ServerInstallerWizard : Window
 
         if (_selectedTemplate != null)
         {
-            cfg.AppId      = _selectedTemplate.AppId;
-            cfg.Executable = _selectedTemplate.Executable;
+            cfg.AppId            = _selectedTemplate.AppId;
+            cfg.Executable       = _selectedTemplate.Executable;
+            cfg.ConfigDir        = _selectedTemplate.ConfigDir;
+            cfg.StdinStopCommand = _selectedTemplate.StdinStopCommand;
             if (!_selectedTemplate.RequiresSteamCmd)
                 cfg.ServerType = _selectedTemplate.Name;
         }

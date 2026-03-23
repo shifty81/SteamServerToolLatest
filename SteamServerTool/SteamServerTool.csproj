@@ -8,6 +8,11 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Output the EXE directly into SteamServerTool/bin/ so that the Servers/,
+         Backups/, and servers.json data folders sit predictably next to the binary. -->
+    <OutputPath>$(MSBuildProjectDirectory)\bin\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="9.0.0" />

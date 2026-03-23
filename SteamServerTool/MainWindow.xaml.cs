@@ -28,6 +28,13 @@ public partial class MainWindow : Window
     /// </summary>
     private static readonly string ServersBaseDir =
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Servers");
+
+    /// <summary>
+    /// Base directory for all server backups.
+    /// Defaults to a "Backups" folder next to the application executable.
+    /// </summary>
+    private static readonly string BackupsBaseDir =
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");
     private RconClient? _rconClient;
 
     // ─── State ──────────────────────────────────────────────────────────────
@@ -1826,6 +1833,12 @@ public partial class MainWindow : Window
         TxtDetailTitle.Text = _selectedConfig.Name;
         PopulateServerList(TxtSearch.Text);
         Log($"Config applied for {_selectedConfig.Name}.");
+    }
+
+    /// <summary>Generates a secure random 20-character RCON password and fills the password field.</summary>
+    private void BtnGenerateRconPassword_Click(object sender, RoutedEventArgs e)
+    {
+        CfgRconPassword.Text = PasswordHelper.Generate(20);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

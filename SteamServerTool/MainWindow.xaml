@@ -524,7 +524,18 @@
                                             <Label Grid.Row="6"  Grid.Column="0" Content="RCON Port:"         VerticalAlignment="Center"/>
                                             <TextBox Grid.Row="6" Grid.Column="1" x:Name="CfgRconPort"        Margin="0,2" VerticalAlignment="Center"/>
                                             <Label Grid.Row="7"  Grid.Column="0" Content="RCON Password:"     VerticalAlignment="Center"/>
-                                            <TextBox Grid.Row="7" Grid.Column="1" x:Name="CfgRconPassword"    Margin="0,2" VerticalAlignment="Center"/>
+                                            <Grid Grid.Row="7" Grid.Column="1" Margin="0,2" VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox Grid.Column="0" x:Name="CfgRconPassword"
+                                                         Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Content="⚡ Generate"
+                                                        Padding="8,4" VerticalAlignment="Center"
+                                                        ToolTip="Generate a secure random RCON password"
+                                                        Click="BtnGenerateRconPassword_Click"/>
+                                            </Grid>
                                             <Label Grid.Row="8"  Grid.Column="0" Content="Backup Folder:"     VerticalAlignment="Center"/>
                                             <TextBox Grid.Row="8" Grid.Column="1" x:Name="CfgBackupFolder"    Margin="0,2" VerticalAlignment="Center"/>
                                             <Label Grid.Row="9"  Grid.Column="0" Content="Keep Backups:"      VerticalAlignment="Center"/>
